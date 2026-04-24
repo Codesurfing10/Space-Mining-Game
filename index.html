@@ -612,7 +612,7 @@ function doDocking(dt) {
   const p   = G.player;
   const b   = G.base;
   const d   = dist(p, b);
-  if (d > CFG.base.dockRange + p.r + 5) { addLog('Too far from base — move closer', 'warn'); return; }
+  if (d > CFG.base.dockRange + CFG.player.collisionR + 5) { addLog('Too far from base — move closer', 'warn'); return; }
 
   p.docked = true;
   p.dockTimer += dt;
@@ -744,7 +744,7 @@ function update(dt) {
     // Catch debris
     if (net.radius > 10) {
       G.debris.forEach((d, di) => {
-        if (dist(net, d) < net.radius + d.r - CFG.net.catchRange) {
+        if (dist(net, d) < net.radius + CFG.net.catchRange - d.r) {
           const bonus = Math.round(d.pts * CFG.netBonusMult);
           G.score += bonus;
           G.debrisCleared++;
@@ -813,7 +813,7 @@ function triggerGameOver() {
   G.state = 'GAMEOVER';
   G.player.hull = 0;
   document.getElementById('finalScore').textContent   = fmt(G.score);
-  document.getElementById('finalWave').textContent    = G.wave - 1;
+  document.getElementById('finalWave').textContent    = Math.max(1, G.wave - 1);
   document.getElementById('finalDebris').textContent  = G.debrisCleared;
   document.getElementById('finalOre').textContent     = Math.round(G.player.totalOre) + ' kg';
   document.getElementById('gameOverScreen').classList.remove('hidden');
