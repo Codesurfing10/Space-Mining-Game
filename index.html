@@ -82,20 +82,20 @@ body::before {
   <div class="tagline">
     Low-Earth orbit is a war zone of dead satellites and rocket bodies.<br>
     You are the A·R·I·A spacecraft — the last line of defense.<br>
-    Mine asteroids. Capture debris. Keep the sky clean.
+    Mine asteroids. Capture debris. Avoid mines. Destroy drones.
   </div>
   <div class="controls-grid">
     <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span class="ctrl-act">Thrust spacecraft</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">LEFT CLICK</span><span class="ctrl-act">Fire laser at debris</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">LEFT CLICK</span><span class="ctrl-act">Fire laser (debris / mines / drones)</span></div>
     <div class="ctrl-row"><span class="ctrl-key">SHIFT</span><span class="ctrl-act">Emergency brake</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">RIGHT CLICK</span><span class="ctrl-act">Deploy capture net</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">RIGHT CLICK</span><span class="ctrl-act">Deploy capture net (debris / drones)</span></div>
     <div class="ctrl-row"><span class="ctrl-key">E</span><span class="ctrl-act">Mining arm (near asteroid)</span></div>
     <div class="ctrl-row"><span class="ctrl-key">R</span><span class="ctrl-act">Dock at base station</span></div>
     <div class="ctrl-row"><span class="ctrl-key">ESC</span><span class="ctrl-act">Pause game</span></div>
     <div class="ctrl-row"><span class="ctrl-key">MOUSE</span><span class="ctrl-act">Aim turret / arms</span></div>
   </div>
   <button class="start-btn" id="startBtn">▶ LAUNCH MISSION</button>
-  <div style="font-size:10px;color:var(--txt2);letter-spacing:.1em;margin-top:4px">Tip: Dock at base (R key) to refuel, reload nets, and bank ore</div>
+  <div style="font-size:10px;color:var(--txt2);letter-spacing:.1em;margin-top:4px">10 levels · Proximity mines · Hostile drones · Hazard zones · Dock at base (R) to refuel</div>
 </div>
 
 <!-- PAUSE SCREEN -->
@@ -108,8 +108,9 @@ body::before {
 
 <!-- WAVE CLEAR SCREEN -->
 <div class="screen hidden" id="waveClearScreen">
-  <div style="font-size:clamp(10px,1.2vw,13px);color:var(--green);letter-spacing:.2em">DEBRIS FIELD CLEARED</div>
-  <h1 id="waveClearTitle" style="font-size:clamp(22px,3.5vw,44px)">WAVE 1 COMPLETE</h1>
+  <div style="font-size:clamp(10px,1.2vw,13px);color:var(--green);letter-spacing:.2em">LEVEL CLEARED</div>
+  <h1 id="waveClearTitle" style="font-size:clamp(22px,3.5vw,44px)">LEVEL 1 COMPLETE</h1>
+  <div id="waveClearSubtitle" style="font-size:clamp(9px,1.1vw,12px);color:var(--cyan);letter-spacing:.15em;margin-top:-10px"></div>
   <div class="stat-row">
     <div class="stat-block"><div class="stat-val" id="waveBonus">+500</div><div class="stat-lbl">WAVE BONUS</div></div>
     <div class="stat-block"><div class="stat-val" id="totalScoreWave">1,250</div><div class="stat-lbl">TOTAL SCORE</div></div>
@@ -181,6 +182,8 @@ const CFG = {
     ion_storm:    { hullDrain: 0,  powerDrain: 18, fuelDrain: 0,   col: '#b06aff', name: 'ION STORM'       },
     debris_cloud: { hullDrain: 3,  powerDrain: 0,  fuelDrain: 2,   col: '#ffc846', name: 'DEBRIS CLOUD'    },
   },
+  mine_obs:  { r: 16, hp: 30, pts: 60,  proximityR: 58, countdown: 2.0, damage: 42 },
+  drone:     { r: 14, hp: 120, pts: 300, speed: 78, alertR: 390, ramDamage: 14 },
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -200,19 +203,83 @@ const ACHIEVEMENTS = [
   { id: 'hazard_survive', label: 'HAZARD PAY',    desc: 'Survive 5 s inside a hazard zone', check: g => g.hazardTime >= 5  },
 ];
 
-/* wave definitions: arrays of {type, count} */
+/* level definitions — 10 named levels with escalating obstacles */
 const WAVES = [
-  { debris: [{t:'small',n:6},{t:'medium',n:2}],           asteroids:[{t:'small',n:3}] },
-  { debris: [{t:'small',n:8},{t:'medium',n:4},{t:'large',n:1}], asteroids:[{t:'small',n:2},{t:'medium',n:2}] },
-  { debris: [{t:'small',n:10},{t:'medium',n:5},{t:'large',n:2}],asteroids:[{t:'small',n:2},{t:'medium',n:2},{t:'large',n:1}] },
-  { debris: [{t:'small',n:12},{t:'medium',n:7},{t:'large',n:3}],asteroids:[{t:'medium',n:3},{t:'large',n:2}] },
-  { debris: [{t:'small',n:14},{t:'medium',n:8},{t:'large',n:4}],asteroids:[{t:'medium',n:2},{t:'large',n:3}] },
+  // 1 — Tutorial: minimal debris, no mines/drones
+  { name: 'SECTOR ALPHA · ENTRY ZONE',
+    briefing: 'Clear the approach corridor and establish a presence.',
+    debris: [{t:'small',n:4},{t:'medium',n:1}],
+    asteroids: [{t:'small',n:3}],
+    mines: 0, drones: 0, oreTarget: 30 },
+
+  // 2 — Debris belt + first mines
+  { name: 'SECTOR BETA · DEBRIS BELT',
+    briefing: 'Dense debris field detected. Proximity mines litter the lane.',
+    debris: [{t:'small',n:7},{t:'medium',n:3}],
+    asteroids: [{t:'small',n:2},{t:'medium',n:1}],
+    mines: 3, drones: 0, oreTarget: 50 },
+
+  // 3 — Ion storm + rogue drone scout
+  { name: 'SECTOR GAMMA · ION STORM',
+    briefing: 'Ion storm active — power bus vulnerability high. One hostile drone scouting.',
+    debris: [{t:'small',n:8},{t:'medium',n:4},{t:'large',n:1}],
+    asteroids: [{t:'small',n:2},{t:'medium',n:2}],
+    mines: 2, drones: 1, oreTarget: 70 },
+
+  // 4 — Mine field challenge
+  { name: 'SECTOR DELTA · MINE FIELD',
+    briefing: 'Scattered proximity mines blanket the sector. Advance with caution.',
+    debris: [{t:'small',n:6},{t:'medium',n:4},{t:'large',n:1}],
+    asteroids: [{t:'medium',n:2},{t:'large',n:1}],
+    mines: 8, drones: 0, oreTarget: 80 },
+
+  // 5 — Drone swarm
+  { name: 'SECTOR EPSILON · DRONE SWARM',
+    briefing: 'Rogue mining drones have turned hostile. Neutralise the swarm.',
+    debris: [{t:'small',n:10},{t:'medium',n:5},{t:'large',n:2}],
+    asteroids: [{t:'medium',n:2},{t:'large',n:1}],
+    mines: 2, drones: 4, oreTarget: 100 },
+
+  // 6 — Radiation belt + drones
+  { name: 'SECTOR ZETA · RADIATION BELT',
+    briefing: 'Heavy radiation — hull integrity will decay. Drones are closing in.',
+    debris: [{t:'small',n:12},{t:'medium',n:6},{t:'large',n:2}],
+    asteroids: [{t:'small',n:3},{t:'medium',n:2},{t:'large',n:1}],
+    mines: 4, drones: 2, oreTarget: 120 },
+
+  // 7 — Satellite graveyard
+  { name: 'SECTOR ETA · SATELLITE GRAVEYARD',
+    briefing: 'Dead satellites everywhere. Heavy drone patrols. Maximum caution.',
+    debris: [{t:'small',n:14},{t:'medium',n:8},{t:'large',n:3}],
+    asteroids: [{t:'medium',n:3},{t:'large',n:2}],
+    mines: 6, drones: 3, oreTarget: 150 },
+
+  // 8 — Storm front: overlapping hazard zones
+  { name: 'SECTOR THETA · STORM FRONT',
+    briefing: 'Multiple hazard zones converge. Mines and drones defend the perimeter.',
+    debris: [{t:'small',n:16},{t:'medium',n:8},{t:'large',n:4}],
+    asteroids: [{t:'medium',n:2},{t:'large',n:3}],
+    mines: 6, drones: 4, oreTarget: 180 },
+
+  // 9 — Siege: overwhelming assault
+  { name: 'SECTOR IOTA · SIEGE MODE',
+    briefing: 'Full-scale assault. All systems critical. Hold the line.',
+    debris: [{t:'small',n:18},{t:'medium',n:10},{t:'large',n:5}],
+    asteroids: [{t:'large',n:4}],
+    mines: 8, drones: 6, oreTarget: 200 },
+
+  // 10 — Final stand
+  { name: 'SECTOR KAPPA · FINAL STAND',
+    briefing: 'Last known debris concentration. Finish this.',
+    debris: [{t:'small',n:20},{t:'medium',n:12},{t:'large',n:6}],
+    asteroids: [{t:'medium',n:3},{t:'large',n:4}],
+    mines: 10, drones: 8, oreTarget: 250 },
 ];
 
 /* ═══════════════════════════════════════════════════════
    STATE
 ══════════════════════════════════════════════════════ */
-let G = {}; // game state, reset each play
+let G = null; // game state, reset each play
 
 function mkPlayer() {
   return {
@@ -232,7 +299,7 @@ function initGame() {
     score: 0, wave: 1, debrisCleared: 0,
     player: mkPlayer(),
     debris: [], asteroids: [], particles: [], nets: [], ore: [],
-    hazards: [],
+    hazards: [], mines: [], drones: [],
     base: { x: CFG.world.w / 2, y: CFG.world.h / 2 },
     cam: { x: 0, y: 0 },
     log: [],
@@ -244,7 +311,8 @@ function initGame() {
     hazardTime: 0,
     unlockedAchievements: new Set(),
     achievementToasts: [],
-    waveGoals: { debrisTarget: 0, oreTarget: 0, oreAtWaveStart: 0 },
+    waveGoals: { debrisTarget: 0, dronesTarget: 0, oreTarget: 0, oreAtWaveStart: 0 },
+    levelName: '',
   };
   spawnWave(1);
 }
@@ -319,6 +387,7 @@ function mkAsteroidShape(r) {
 
 function spawnWave(waveNum) {
   const wd = waveData(waveNum);
+  G.levelName = wd.name;
   let totalDebris = 0;
   wd.debris.forEach(d => {
     for (let i = 0; i < d.n; i++) {
@@ -360,12 +429,18 @@ function spawnWave(waveNum) {
   // Spawn hazard zones — more per wave
   spawnHazards(waveNum);
 
+  // Spawn mines and drones from level config
+  spawnMines(wd.mines || 0);
+  spawnDrones(wd.drones || 0);
+
   // Set wave goals
   G.waveGoals.debrisTarget = totalDebris;
-  G.waveGoals.oreTarget    = 50 * waveNum;
+  G.waveGoals.dronesTarget = wd.drones || 0;
+  G.waveGoals.oreTarget    = wd.oreTarget || 50 * waveNum;
   G.waveGoals.oreAtWaveStart = G.player.totalOre;
 
-  addLog('WAVE ' + waveNum + ' — ' + G.debris.length + ' debris targets + ' + G.asteroids.length + ' asteroids', 'ok');
+  addLog('LEVEL ' + waveNum + ': ' + wd.name, 'ok');
+  addLog(wd.briefing, 'info');
 }
 
 function spawnHazards(waveNum) {
@@ -383,6 +458,49 @@ function spawnHazards(waveNum) {
     });
   }
   addLog(count + ' hazard zone(s) detected this wave', 'warn');
+}
+
+function spawnMines(count) {
+  G.mines = [];
+  const mc = CFG.mine_obs;
+  for (let i = 0; i < count; i++) {
+    const pos = randomEdgePos(200);
+    const drift = (Math.random() - 0.5) * 6;
+    const drift2 = (Math.random() - 0.5) * 6;
+    G.mines.push({
+      x: pos.x, y: pos.y,
+      vx: drift, vy: drift2,
+      r: mc.r, hp: mc.hp, maxHp: mc.hp,
+      armed: true,
+      beeping: false,
+      countdown: 0,
+      beepTimer: 0,
+      pulse: Math.random() * Math.PI * 2,
+      id: 'MNE-' + String(Math.floor(Math.random()*9000)+1000),
+    });
+  }
+  if (count > 0) addLog(count + ' proximity mine(s) deployed in sector', 'warn');
+}
+
+function spawnDrones(count) {
+  G.drones = [];
+  const dc = CFG.drone;
+  for (let i = 0; i < count; i++) {
+    const pos = randomEdgePos(400);
+    const patrolAngle = Math.random() * Math.PI * 2;
+    G.drones.push({
+      x: pos.x, y: pos.y,
+      vx: Math.cos(patrolAngle) * dc.speed * 0.3,
+      vy: Math.sin(patrolAngle) * dc.speed * 0.3,
+      r: dc.r, hp: dc.hp, maxHp: dc.hp,
+      angle: patrolAngle,
+      state: 'patrol',
+      patrolAngle: patrolAngle,
+      patrolTimer: 2 + Math.random() * 3,
+      id: 'DRN-' + String(Math.floor(Math.random()*9000)+1000),
+    });
+  }
+  if (count > 0) addLog(count + ' hostile drone(s) detected in sector', 'crit');
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -448,6 +566,9 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 document.getElementById('nextWaveBtn').addEventListener('click', () => {
   hideAllScreens();
   G.wave++;
+  // Clear leftover mines and drones from previous level
+  G.mines = [];
+  G.drones = [];
   spawnWave(G.wave);
   G.state = 'PLAYING';
   G.waveActive = true;
@@ -548,7 +669,7 @@ function fireLaser(dt) {
   let best = null, bestDist = Infinity;
   const ux = dx / d, uy = dy / d;
 
-  [...G.debris, ...G.asteroids].forEach(obj => {
+  [...G.debris, ...G.asteroids, ...G.mines, ...G.drones].forEach(obj => {
     const tx = obj.x - p.x, ty = obj.y - p.y;
     const proj = tx * ux + ty * uy;
     if (proj < 0 || proj > CFG.player.laserRange) return;
@@ -570,7 +691,28 @@ function fireLaser(dt) {
   };
 
   if (best) {
-    if (best.hp !== undefined) { // debris
+    const isMine  = G.mines.indexOf(best) !== -1;
+    const isDrone = G.drones.indexOf(best) !== -1;
+    if (isMine) {
+      // One laser shot disarms/destroys the mine
+      best.hp -= CFG.laser.damage;
+      spawnParticles(best.x, best.y, 4, '#ffc846', 70, 0.3, 2);
+      if (best.hp <= 0) {
+        spawnExplosion(best.x, best.y, best.r * 1.8);
+        G.score += best.pts;
+        addLog('Mine neutralised: ' + best.id + ' (+' + best.pts + ' pts)', 'ok');
+        G.mines.splice(G.mines.indexOf(best), 1);
+      }
+    } else if (isDrone) {
+      best.hp -= CFG.laser.damage;
+      spawnParticles(best.x, best.y, 6, '#ff4060', 90, 0.3, 2.5);
+      if (best.hp <= 0) {
+        spawnExplosion(best.x, best.y, best.r * 2);
+        G.score += CFG.drone.pts;
+        addLog('Drone destroyed: ' + best.id + ' (+' + CFG.drone.pts + ' pts)', 'ok');
+        G.drones.splice(G.drones.indexOf(best), 1);
+      }
+    } else if (best.hp !== undefined) { // debris
       best.hp -= CFG.laser.damage;
       spawnParticles(best.x, best.y, 5, '#00c8ff', 80, 0.25, 2);
       if (best.hp <= 0) {
@@ -812,6 +954,20 @@ function update(dt) {
           G.shakeTimer = 0.1; G.shakeAmt = 2;
         }
       });
+      // Nets can also snare drones
+      for (let di = G.drones.length - 1; di >= 0; di--) {
+        const dr = G.drones[di];
+        if (dist(net, dr) < net.radius + CFG.net.catchRange - dr.r) {
+          const bonus = Math.round(CFG.drone.pts * CFG.netBonusMult);
+          G.score += bonus;
+          G.netCaptures++;
+          addLog('Net snared drone: ' + dr.id + ' (+' + bonus + ' pts)', 'ok');
+          spawnParticles(dr.x, dr.y, 14, '#b06aff', 60, 0.5, 3);
+          net.caught.push(dr.id);
+          G.drones.splice(di, 1);
+          G.shakeTimer = 0.1; G.shakeAmt = 2;
+        }
+      }
     }
     if (net.life <= 0 || net.caught.length >= 3) {
       G.nets.splice(ni, 1);
@@ -859,6 +1015,101 @@ function update(dt) {
   });
   if (inHazard) G.hazardTime += dt;
 
+  // ── Update mines ──
+  for (let i = G.mines.length - 1; i >= 0; i--) {
+    const m = G.mines[i];
+    m.pulse += dt * 2.5;
+    m.x += m.vx * dt; m.y += m.vy * dt;
+    const W = CFG.world.w, H = CFG.world.h;
+    if (m.x < 0) m.x += W; if (m.x > W) m.x -= W;
+    if (m.y < 0) m.y += H; if (m.y > H) m.y -= H;
+
+    if (!m.armed) continue;
+
+    const dToPlayer = dist(p, m);
+    if (dToPlayer < m.r + CFG.player.collisionR) {
+      // Direct contact — instant explosion
+      const dmg = CFG.mine_obs.damage;
+      p.hull -= dmg;
+      spawnExplosion(m.x, m.y, m.r * 2.5);
+      addLog('⚠ Mine detonated on contact! -' + dmg + ' hull', 'crit');
+      G.mines.splice(i, 1);
+      G.shakeTimer = 0.45; G.shakeAmt = 8;
+      continue;
+    }
+
+    if (dToPlayer < CFG.mine_obs.proximityR) {
+      m.beeping = true;
+      m.countdown += dt;
+      m.beepTimer -= dt;
+      if (m.beepTimer <= 0) {
+        m.beepTimer = Math.max(0.08, 0.5 - m.countdown * 0.18);
+        addLog('⚠ ' + m.id + ' proximity triggered — ' + Math.max(0, (CFG.mine_obs.countdown - m.countdown)).toFixed(1) + 's', 'crit');
+      }
+      if (m.countdown >= CFG.mine_obs.countdown) {
+        const dmg = CFG.mine_obs.damage;
+        p.hull -= dmg;
+        spawnExplosion(m.x, m.y, m.r * 2.5);
+        addLog('💥 Mine detonated! -' + dmg + ' hull', 'crit');
+        G.mines.splice(i, 1);
+        G.shakeTimer = 0.45; G.shakeAmt = 8;
+      }
+    } else {
+      m.beeping = false;
+      m.countdown = Math.max(0, m.countdown - dt * 0.5);
+    }
+  }
+
+  // ── Update drones ──
+  const dc = CFG.drone;
+  for (let i = G.drones.length - 1; i >= 0; i--) {
+    const dr = G.drones[i];
+    dr.pulse = (dr.pulse || 0) + dt * 2;
+    const dToP = dist(p, dr);
+
+    if (dToP < dc.alertR) {
+      dr.state = 'attack';
+    } else if (dr.state === 'attack' && dToP > dc.alertR * 1.4) {
+      dr.state = 'patrol';
+    }
+
+    if (dr.state === 'attack') {
+      // Chase player
+      const ax = p.x - dr.x, ay = p.y - dr.y;
+      const ad = Math.hypot(ax, ay) || 1;
+      dr.vx += (ax / ad) * dc.speed * dt * 1.8;
+      dr.vy += (ay / ad) * dc.speed * dt * 1.8;
+      dr.angle = Math.atan2(ay, ax);
+    } else {
+      // Patrol — wander slowly
+      dr.patrolTimer -= dt;
+      if (dr.patrolTimer <= 0) {
+        dr.patrolAngle += (Math.random() - 0.5) * Math.PI;
+        dr.patrolTimer = 2 + Math.random() * 3;
+      }
+      dr.vx += Math.cos(dr.patrolAngle) * dc.speed * 0.3 * dt;
+      dr.vy += Math.sin(dr.patrolAngle) * dc.speed * 0.3 * dt;
+      dr.angle = dr.patrolAngle;
+    }
+
+    // Clamp drone speed
+    const dspd = Math.hypot(dr.vx, dr.vy);
+    const maxDspd = dr.state === 'attack' ? dc.speed : dc.speed * 0.35;
+    if (dspd > maxDspd) { dr.vx = dr.vx / dspd * maxDspd; dr.vy = dr.vy / dspd * maxDspd; }
+
+    dr.x += dr.vx * dt; dr.y += dr.vy * dt;
+    const Wd = CFG.world.w, Hd = CFG.world.h;
+    if (dr.x < 0) dr.x += Wd; if (dr.x > Wd) dr.x -= Wd;
+    if (dr.y < 0) dr.y += Hd; if (dr.y > Hd) dr.y -= Hd;
+
+    // Ram collision with player
+    if (dToP < dc.r + CFG.player.collisionR) {
+      p.hull -= dc.ramDamage * dt * 4;
+      spawnParticles(p.x, p.y, 5, '#ff4060', 80, 0.35, 2.5);
+      G.shakeTimer = 0.25; G.shakeAmt = 5;
+    }
+  }
+
   // ── Decay achievement toasts ──
   G.achievementToasts.forEach(t => { t.timer -= dt; });
   G.achievementToasts = G.achievementToasts.filter(t => t.timer > 0);
@@ -869,8 +1120,8 @@ function update(dt) {
   // ── Check hull ──
   if (p.hull <= 0) triggerGameOver();
 
-  // ── Check wave clear ──
-  if (G.waveActive && G.debris.length === 0) {
+  // ── Check wave clear (all debris AND all drones must be neutralised) ──
+  if (G.waveActive && G.debris.length === 0 && G.drones.length === 0) {
     G.waveActive = false;
     triggerWaveClear();
   }
@@ -883,14 +1134,16 @@ function triggerWaveClear() {
   G.state = 'WAVE_CLEAR';
   const bonus = CFG.waveBonusBase * G.wave;
   G.score += bonus;
-  addLog('WAVE ' + G.wave + ' cleared! +' + bonus + ' bonus', 'ok');
-  document.getElementById('waveClearTitle').textContent = 'WAVE ' + G.wave + ' COMPLETE';
+  addLog('LEVEL ' + G.wave + ' cleared! +' + bonus + ' bonus', 'ok');
+  const nextWaveData = waveData(G.wave + 1);
+  document.getElementById('waveClearTitle').textContent = 'LEVEL ' + G.wave + ' COMPLETE';
+  document.getElementById('waveClearSubtitle').textContent = G.levelName;
   document.getElementById('waveBonus').textContent = '+' + fmt(bonus);
   document.getElementById('totalScoreWave').textContent = fmt(G.score);
   document.getElementById('nextWaveMsg').textContent =
     G.asteroids.length > 0
       ? 'Asteroids still active — mine for bonus ore before advancing!'
-      : 'Preparing Wave ' + (G.wave + 1) + ' deployment...';
+      : 'Next: Level ' + (G.wave + 1) + ' — ' + nextWaveData.name;
   document.getElementById('waveClearScreen').classList.remove('hidden');
 }
 
@@ -1008,6 +1261,12 @@ function render() {
 
   // ── Asteroids ──
   G.asteroids.forEach(a => renderAsteroid(a));
+
+  // ── Mines ──
+  G.mines.forEach(m => renderMine(m));
+
+  // ── Drones ──
+  G.drones.forEach(d => renderDrone(d));
 
   // ── Debris ──
   G.debris.forEach(d => renderDebris(d));
@@ -1429,19 +1688,27 @@ function renderHUD() {
 
   // Center stats
   const stats = [
-    { lbl: 'SCORE',    val: fmt(G.score),   col: '#00c8ff' },
-    { lbl: 'WAVE',     val: String(G.wave),  col: '#00c8ff' },
-    { lbl: 'DEBRIS',   val: String(G.debris.length), col: G.debris.length > 0 ? '#ffc846' : '#00e5a0' },
-    { lbl: 'TARGETS',  val: String(G.debris.length + G.asteroids.length), col: '#4da6ff' },
+    { lbl: 'SCORE',   val: fmt(G.score),                col: '#00c8ff' },
+    { lbl: 'LEVEL',   val: String(G.wave),              col: '#00c8ff' },
+    { lbl: 'DEBRIS',  val: String(G.debris.length),     col: G.debris.length > 0 ? '#ffc846' : '#00e5a0' },
+    { lbl: 'MINES',   val: String(G.mines.length),      col: G.mines.length > 0 ? '#ffc846' : '#00e5a0' },
+    { lbl: 'DRONES',  val: String(G.drones.length),     col: G.drones.length > 0 ? '#ff4060' : '#00e5a0' },
   ];
-  const sw = 110, sx0 = cw/2 - (stats.length * sw) / 2;
+  const sw = 100, sx0 = cw/2 - (stats.length * sw) / 2;
   stats.forEach((s, i) => {
     const x = sx0 + i * sw + sw/2;
-    ctx.fillStyle = s.col; ctx.font = 'bold 16px Courier New'; ctx.textAlign = 'center';
+    ctx.fillStyle = s.col; ctx.font = 'bold 15px Courier New'; ctx.textAlign = 'center';
     ctx.fillText(s.val, x, 22);
     ctx.fillStyle = 'rgba(120,190,220,0.6)'; ctx.font = '9px Courier New';
     ctx.fillText(s.lbl, x, 36);
   });
+
+  // Level name banner (below top bar)
+  if (G.levelName) {
+    ctx.fillStyle = 'rgba(0,200,255,0.55)';
+    ctx.font = '9px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText(G.levelName, cw/2, 48);
+  }
 
   // Clock
   const now = new Date();
@@ -1600,6 +1867,20 @@ function renderHUD() {
     ctx.setLineDash([]);
   });
 
+  // Mines
+  G.mines.forEach(m => {
+    const mm2 = toMM(m.x, m.y);
+    ctx.fillStyle = m.beeping ? '#ff4060' : '#ffc846';
+    ctx.beginPath(); ctx.arc(mm2.x, mm2.y, 1.8, 0, Math.PI*2); ctx.fill();
+  });
+
+  // Drones
+  G.drones.forEach(dr => {
+    const drm = toMM(dr.x, dr.y);
+    ctx.fillStyle = dr.state === 'attack' ? '#ff4060' : '#b06aff';
+    ctx.beginPath(); ctx.arc(drm.x, drm.y, 2.5, 0, Math.PI*2); ctx.fill();
+  });
+
   // Player
   const pm = toMM(G.player.x, G.player.y);
   ctx.fillStyle = '#00e5a0';
@@ -1618,6 +1899,7 @@ function renderHUD() {
   ctx.fillStyle = '#ffc846'; ctx.fillText('■ AST', mmx + 88, mmy + mmh - 22);
   ctx.fillStyle = '#00c8ff'; ctx.fillText('■ BASE', mmx + 5, mmy + mmh - 11);
   ctx.fillStyle = '#b06aff'; ctx.fillText('○ HAZ', mmx + 48, mmy + mmh - 11);
+  ctx.fillStyle = '#ffc846'; ctx.fillText('◆ MINE', mmx + 85, mmy + mmh - 11);
 
   // ── Crosshair (at mouse position, world-space) ──
   renderCrosshair();
@@ -1657,13 +1939,15 @@ function renderHUD() {
 
 function renderGoals() {
   const cw = canvas.width;
-  const gx = 12, gy = 300, gw = 190, gh = 110;
+  const hasDrones = G.waveGoals.dronesTarget > 0;
+  const gh = hasDrones ? 145 : 125;
+  const gx = 12, gy = 300, gw = 190;
   ctx.fillStyle = 'rgba(4,21,37,0.82)';
   ctx.strokeStyle = 'rgba(0,200,255,0.15)'; ctx.lineWidth = 1;
   ctx.fillRect(gx, gy, gw, gh); ctx.strokeRect(gx, gy, gw, gh);
 
   ctx.fillStyle = '#00c8ff'; ctx.font = '9px Courier New'; ctx.textAlign = 'left';
-  ctx.fillText('WAVE ' + G.wave + ' GOALS', gx + 8, gy + 14);
+  ctx.fillText('LEVEL ' + G.wave + ' OBJECTIVES', gx + 8, gy + 14);
   ctx.strokeStyle = 'rgba(0,200,255,0.15)';
   ctx.beginPath(); ctx.moveTo(gx, gy+20); ctx.lineTo(gx+gw, gy+20); ctx.stroke();
 
@@ -1680,36 +1964,54 @@ function renderGoals() {
   ctx.fillStyle = debrisDone ? '#00e5a0' : '#ffc846';
   ctx.fillRect(gx+8, gy+37, (gw-16)*debrisRatio, 5);
 
-  // Goal 2: mine ore bonus
+  // Goal 2: neutralise drones (only shown if level has drones)
+  let rowY = gy + 55;
+  if (hasDrones) {
+    const dronesKilled = G.waveGoals.dronesTarget - G.drones.length;
+    const dronesRatio  = Math.min(1, dronesKilled / G.waveGoals.dronesTarget);
+    const dronesDone   = dronesRatio >= 1;
+    ctx.fillStyle = 'rgba(120,190,220,0.6)'; ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+    ctx.fillText('NEUTRALISE DRONES', gx + 8, rowY);
+    ctx.fillStyle = dronesDone ? '#00e5a0' : '#ff4060'; ctx.textAlign = 'right';
+    ctx.fillText(dronesKilled + ' / ' + G.waveGoals.dronesTarget, gx + gw - 8, rowY);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(gx+8, rowY+3, gw-16, 5);
+    ctx.fillStyle = dronesDone ? '#00e5a0' : '#ff4060';
+    ctx.fillRect(gx+8, rowY+3, (gw-16)*dronesRatio, 5);
+    rowY += 20;
+  }
+
+  // Goal 3: mine ore bonus
   const oreMined    = G.player.totalOre - G.waveGoals.oreAtWaveStart;
   const oreRatio    = Math.min(1, oreMined / G.waveGoals.oreTarget);
   const oreDone     = oreRatio >= 1;
 
   ctx.fillStyle = 'rgba(120,190,220,0.6)'; ctx.font = '8px Courier New'; ctx.textAlign = 'left';
-  ctx.fillText('MINE ORE BONUS', gx + 8, gy + 55);
+  ctx.fillText('MINE ORE BONUS', gx + 8, rowY);
   ctx.fillStyle = oreDone ? '#00e5a0' : '#ffc846'; ctx.textAlign = 'right';
-  ctx.fillText(Math.round(oreMined) + ' / ' + G.waveGoals.oreTarget + ' kg', gx + gw - 8, gy + 55);
-  ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(gx+8, gy+58, gw-16, 5);
+  ctx.fillText(Math.round(oreMined) + ' / ' + G.waveGoals.oreTarget + ' kg', gx + gw - 8, rowY);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(gx+8, rowY+3, gw-16, 5);
   ctx.fillStyle = oreDone ? '#00e5a0' : '#ffc846';
-  ctx.fillRect(gx+8, gy+58, (gw-16)*oreRatio, 5);
+  ctx.fillRect(gx+8, rowY+3, (gw-16)*oreRatio, 5);
+  rowY += 20;
 
-  // Goal 3: achievements progress
+  // Goal 4: achievements progress
   const achCount = G.unlockedAchievements.size;
   ctx.fillStyle = 'rgba(120,190,220,0.6)'; ctx.font = '8px Courier New'; ctx.textAlign = 'left';
-  ctx.fillText('ACHIEVEMENTS', gx + 8, gy + 76);
+  ctx.fillText('ACHIEVEMENTS', gx + 8, rowY);
   ctx.fillStyle = '#b06aff'; ctx.textAlign = 'right';
-  ctx.fillText(achCount + ' / ' + ACHIEVEMENTS.length, gx + gw - 8, gy + 76);
-  ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(gx+8, gy+79, gw-16, 5);
+  ctx.fillText(achCount + ' / ' + ACHIEVEMENTS.length, gx + gw - 8, rowY);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(gx+8, rowY+3, gw-16, 5);
   ctx.fillStyle = '#b06aff';
-  ctx.fillRect(gx+8, gy+79, (gw-16)*(achCount/ACHIEVEMENTS.length), 5);
+  ctx.fillRect(gx+8, rowY+3, (gw-16)*(achCount/ACHIEVEMENTS.length), 5);
+  rowY += 17;
 
-  // Hazard warning strip if hazards nearby
+  // Warning strips
   const nearHazard = G.hazards.some(h => dist(G.player, h) < h.r * 1.6);
   if (nearHazard) {
     const alpha = 0.6 + Math.sin(G.time * 6) * 0.4;
     ctx.fillStyle = `rgba(255,64,96,${alpha})`;
     ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'center';
-    ctx.fillText('⚠ HAZARD ZONE NEARBY', gx + gw/2, gy + 101);
+    ctx.fillText('⚠ HAZARD ZONE NEARBY', gx + gw/2, rowY);
   }
 }
 
@@ -1743,6 +2045,156 @@ function renderAchievementToasts() {
   });
 }
 
+/* ── Mine ── */
+function renderMine(m) {
+  const pulse = Math.sin(m.pulse) * 0.5 + 0.5;
+  const beepAlpha = m.beeping ? (0.5 + pulse * 0.5) : (0.2 + pulse * 0.15);
+  const coreCol = m.beeping ? `rgba(255,64,96,${beepAlpha})` : `rgba(255,200,70,${beepAlpha})`;
+
+  ctx.save();
+  ctx.translate(m.x, m.y);
+
+  // Outer proximity ring (faint)
+  if (m.beeping) {
+    ctx.strokeStyle = `rgba(255,64,96,${0.15 + pulse * 0.2})`;
+    ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.arc(0, 0, CFG.mine_obs.proximityR, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Mine body glow
+  const mg = ctx.createRadialGradient(0,0,0,0,0,m.r * 1.8);
+  mg.addColorStop(0, m.beeping ? `rgba(255,64,96,${0.3+pulse*0.3})` : `rgba(255,150,50,${0.15+pulse*0.1})`);
+  mg.addColorStop(1, 'rgba(255,64,96,0)');
+  ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(0, 0, m.r * 1.8, 0, Math.PI*2); ctx.fill();
+
+  // Mine body hexagon
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i/6) * Math.PI * 2;
+    const r = m.r * (0.85 + Math.sin(a * 3 + m.pulse) * 0.08);
+    i === 0 ? ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r) : ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+  }
+  ctx.closePath();
+  ctx.fillStyle = m.beeping ? 'rgba(60,10,10,0.95)' : 'rgba(30,20,5,0.95)';
+  ctx.strokeStyle = coreCol; ctx.lineWidth = 1.5;
+  ctx.fill(); ctx.stroke();
+
+  // Core dot
+  ctx.fillStyle = coreCol;
+  ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
+
+  // Spikes
+  for (let i = 0; i < 6; i++) {
+    const a = (i/6) * Math.PI * 2 + Math.PI/6;
+    ctx.strokeStyle = coreCol; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * (m.r - 2), Math.sin(a) * (m.r - 2));
+    ctx.lineTo(Math.cos(a) * (m.r + 5), Math.sin(a) * (m.r + 5));
+    ctx.stroke();
+  }
+
+  // Countdown arc if beeping
+  if (m.beeping && m.countdown > 0) {
+    const frac = Math.min(1, m.countdown / CFG.mine_obs.countdown);
+    ctx.strokeStyle = `rgba(255,64,96,${0.7 + pulse * 0.3})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, m.r + 3, -Math.PI/2, -Math.PI/2 + frac * Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // Label when nearby
+  if (dist(G.player, m) < 250) {
+    ctx.fillStyle = m.beeping ? `rgba(255,64,96,${0.7+pulse*0.3})` : 'rgba(255,200,70,0.6)';
+    ctx.font = '8px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText(m.beeping ? '⚠ ARMED' : '◆ MINE', m.x, m.y - m.r - 8);
+  }
+
+  // HP bar when damaged
+  if (m.hp < m.maxHp) {
+    const bw = m.r * 2.5, bh = 3;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(m.x - bw/2, m.y - m.r - 16, bw, bh);
+    ctx.fillStyle = '#ffc846';
+    ctx.fillRect(m.x - bw/2, m.y - m.r - 16, bw * (m.hp / m.maxHp), bh);
+  }
+}
+
+/* ── Drone ── */
+function renderDrone(dr) {
+  const hpRatio = dr.hp / dr.maxHp;
+  const pulse = Math.sin((dr.pulse || 0)) * 0.5 + 0.5;
+  const isAttacking = dr.state === 'attack';
+  const col = isAttacking ? '#ff4060' : '#b06aff';
+
+  ctx.save();
+  ctx.translate(dr.x, dr.y);
+  ctx.rotate(dr.angle);
+
+  // Alert range ring when nearby
+  if (isAttacking && dist(G.player, dr) < CFG.drone.alertR * 1.1) {
+    ctx.strokeStyle = `rgba(255,64,96,${0.1 + pulse * 0.1})`;
+    ctx.lineWidth = 1; ctx.setLineDash([5,5]);
+    ctx.beginPath(); ctx.arc(0, 0, CFG.drone.alertR, 0, Math.PI*2);
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // Engine glow
+  const eg = ctx.createRadialGradient(-14, 0, 0, -14, 0, 20);
+  eg.addColorStop(0, isAttacking ? 'rgba(255,64,96,0.6)' : 'rgba(176,106,255,0.4)');
+  eg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(-14, 0, 20, 0, Math.PI*2); ctx.fill();
+
+  // Hull damage glow
+  if (hpRatio < 0.5) {
+    const hg = ctx.createRadialGradient(0,0,0,0,0,25);
+    hg.addColorStop(0, `rgba(255,64,96,${(0.5-hpRatio)*0.6})`);
+    hg.addColorStop(1, 'rgba(255,64,96,0)');
+    ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(0,0,25,0,Math.PI*2); ctx.fill();
+  }
+
+  // Drone body (angular hostile look)
+  ctx.fillStyle = 'rgba(30,5,5,0.92)';
+  ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(14, 0);
+  ctx.lineTo(6, -8);
+  ctx.lineTo(-12, -10);
+  ctx.lineTo(-16, -5);
+  ctx.lineTo(-16,  5);
+  ctx.lineTo(-12, 10);
+  ctx.lineTo(6,  8);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // Sensor eye
+  ctx.fillStyle = isAttacking ? `rgba(255,64,96,${0.6+pulse*0.4})` : `rgba(176,106,255,${0.4+pulse*0.3})`;
+  ctx.beginPath(); ctx.arc(8, 0, 3.5, 0, Math.PI*2); ctx.fill();
+
+  // Weapon barrel
+  ctx.strokeStyle = isAttacking ? '#ff4060' : '#b06aff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(18, 0); ctx.stroke();
+
+  ctx.restore();
+
+  // HP bar
+  if (hpRatio < 1) {
+    const bw = dr.r * 2.5, bh = 3;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(dr.x - bw/2, dr.y - dr.r - 10, bw, bh);
+    ctx.fillStyle = hpRatio > 0.5 ? '#ff4060' : '#ffc846';
+    ctx.fillRect(dr.x - bw/2, dr.y - dr.r - 10, bw * hpRatio, bh);
+  }
+
+  // Label when nearby
+  if (dist(G.player, dr) < 300) {
+    ctx.fillStyle = isAttacking ? `rgba(255,64,96,${0.7+pulse*0.3})` : 'rgba(176,106,255,0.6)';
+    ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText(isAttacking ? '▶ HOSTILE' : '◌ PATROL', dr.x, dr.y - dr.r - 14);
+  }
+}
+
 function renderCrosshair() {
   const mx = mouse.x, my = mouse.y;
   const cw = canvas.width, ch = canvas.height;
@@ -1751,7 +2203,7 @@ function renderCrosshair() {
 
   // Check if pointing at anything
   let onTarget = false;
-  [...G.debris, ...G.asteroids].forEach(obj => {
+  [...G.debris, ...G.asteroids, ...G.mines, ...G.drones].forEach(obj => {
     if (dist({x:wMX,y:wMY}, obj) < obj.r + 12) onTarget = true;
   });
   const inRange = dist(G.player, {x:wMX,y:wMY}) < CFG.player.laserRange;
