@@ -699,8 +699,8 @@ function fireLaser(dt) {
       spawnParticles(best.x, best.y, 4, '#ffc846', 70, 0.3, 2);
       if (best.hp <= 0) {
         spawnExplosion(best.x, best.y, best.r * 1.8);
-        G.score += best.pts;
-        addLog('Mine neutralised: ' + best.id + ' (+' + best.pts + ' pts)', 'ok');
+        G.score += CFG.mine_obs.pts;
+        addLog('Mine neutralised: ' + best.id + ' (+' + CFG.mine_obs.pts + ' pts)', 'ok');
         G.mines.splice(G.mines.indexOf(best), 1);
       }
     } else if (isDrone) {
@@ -1043,6 +1043,7 @@ function update(dt) {
       m.countdown += dt;
       m.beepTimer -= dt;
       if (m.beepTimer <= 0) {
+        // Beep rate accelerates as countdown nears detonation: starts at 0.5s intervals, shrinks to 0.08s minimum
         m.beepTimer = Math.max(0.08, 0.5 - m.countdown * 0.18);
         addLog('⚠ ' + m.id + ' proximity triggered — ' + Math.max(0, (CFG.mine_obs.countdown - m.countdown)).toFixed(1) + 's', 'crit');
       }
@@ -1102,7 +1103,7 @@ function update(dt) {
     if (dr.x < 0) dr.x += Wd; if (dr.x > Wd) dr.x -= Wd;
     if (dr.y < 0) dr.y += Hd; if (dr.y > Hd) dr.y -= Hd;
 
-    // Ram collision with player
+    // Ram collision with player — damage multiplied by dt*4 to scale per-frame to per-second impact feel
     if (dToP < dc.r + CFG.player.collisionR) {
       p.hull -= dc.ramDamage * dt * 4;
       spawnParticles(p.x, p.y, 5, '#ff4060', 80, 0.35, 2.5);
@@ -1135,7 +1136,8 @@ function triggerWaveClear() {
   const bonus = CFG.waveBonusBase * G.wave;
   G.score += bonus;
   addLog('LEVEL ' + G.wave + ' cleared! +' + bonus + ' bonus', 'ok');
-  const nextWaveData = waveData(G.wave + 1);
+  const nextLevelNum = G.wave + 1;
+  const isLastLevel = G.wave >= WAVES.length;
   document.getElementById('waveClearTitle').textContent = 'LEVEL ' + G.wave + ' COMPLETE';
   document.getElementById('waveClearSubtitle').textContent = G.levelName;
   document.getElementById('waveBonus').textContent = '+' + fmt(bonus);
@@ -1143,7 +1145,9 @@ function triggerWaveClear() {
   document.getElementById('nextWaveMsg').textContent =
     G.asteroids.length > 0
       ? 'Asteroids still active — mine for bonus ore before advancing!'
-      : 'Next: Level ' + (G.wave + 1) + ' — ' + nextWaveData.name;
+      : isLastLevel
+        ? 'All sectors cleared — mission continues with maximum threat...'
+        : 'Next: Level ' + nextLevelNum + ' — ' + waveData(nextLevelNum).name;
   document.getElementById('waveClearScreen').classList.remove('hidden');
 }
 
