@@ -16,11 +16,11 @@ const CFG = {
   net: { speed: 240, maxRadius: 130, expandTime: 1.4, lifetime: 9, catchRange: 30 },
   mine: { rate: 18, range: 90, powerDrain: 8 },
   base: { dockRange: 80, refuelRate: 40, repairRate: 30, reloadRate: 2 },
-  debris: { small: { r: 8, hp: 60, pts: 100, speed: [20,55], rotSpeed: [0.5,2.5] }, medium: { r: 18, hp: 160, pts: 250, speed: [12,35], rotSpeed: [0.2,1.2] }, large: { r: 34, hp: 400, pts: 500, speed: [8,22], rotSpeed: [0.1,0.8] } },
+  debris: { small: { r: 8, hp: 60, pts: 100, speed: [20,55], rotSpeed: [0.5,2.5] }, medium: { r: 18, hp: 160, pts: 250, speed: [12,35], rotSpeed: [0.2,1.2] }, large: { r: 34, hp: 400, pts: 500, sp[...]
   asteroid: { small: { r: 28, ore: 60, speed: [5,18] }, medium: { r: 48, ore: 130, speed: [3,12] }, large: { r: 72, ore: 260, speed: [2,8] } },
   netBonusMult: 1.5,
   waveBonusBase: 500,
-  hazard: { radiation: { hullDrain: 6, powerDrain: 0, fuelDrain: 0, col: '#ff4060', name: 'RADIATION BELT' }, ion_storm: { hullDrain: 0, powerDrain: 18, fuelDrain: 0, col: '#b06aff', name: 'ION STORM' }, debris_cloud: { hullDrain: 3, powerDrain: 4, fuelDrain: 2, col: '#ffc846', name: 'DEBRIS CLOUD' } },
+  hazard: { radiation: { hullDrain: 6, powerDrain: 0, fuelDrain: 0, col: '#ff4060', name: 'RADIATION BELT' }, ion_storm: { hullDrain: 0, powerDrain: 18, fuelDrain: 0, col: '#b06aff', name: 'ION ST[...]
   mine_obs: { r: 16, hp: 30, pts: 60, proximityR: 58, countdown: 2.0, damage: 42 },
   drone: { r: 14, hp: 120, pts: 300, speed: 78, alertR: 390, ramDamage: 14 },
   radar: { range: 800, radarSize: 120, centerX: 0, centerY: 0 },
@@ -41,26 +41,26 @@ const ACHIEVEMENTS = [
 ];
 
 const WAVES = [
-  { name: 'SECTOR ALPHA · ENTRY ZONE', briefing: 'Clear the approach corridor and establish a presence.', debris: [{t:'small',n:4},{t:'medium',n:1}], asteroids: [{t:'small',n:3}], mines: 0, drones: 0 },
-  { name: 'SECTOR BETA · DEBRIS BELT', briefing: 'Dense debris field detected. Proximity mines litter the lane.', debris: [{t:'small',n:7},{t:'medium',n:3}], asteroids: [{t:'small',n:2},{t:'medium',n:1}], mines: 2, drones: 0 },
-  { name: 'SECTOR GAMMA · ION STORM', briefing: 'Ion storm active — power bus vulnerability high. One hostile drone scouting.', debris: [{t:'small',n:8},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:'medium',n:2}], mines: 1, drones: 1 },
-  { name: 'SECTOR DELTA · MINE FIELD', briefing: 'Scattered proximity mines blanket the sector. Advance with caution.', debris: [{t:'small',n:6},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:'medium',n:1},{t:'large',n:1}], mines: 4, drones: 0 },
-  { name: 'SECTOR EPSILON · DRONE SWARM', briefing: 'Rogue mining drones have turned hostile. Neutralise the swarm.', debris: [{t:'small',n:10},{t:'medium',n:5},{t:'large',n:2}], asteroids: [{t:'large',n:1}], mines: 1, drones: 3 },
-  { name: 'SECTOR ZETA · RADIATION BELT', briefing: 'Heavy radiation — hull integrity will decay. Drones are closing in.', debris: [{t:'small',n:12},{t:'medium',n:6},{t:'large',n:2}], asteroids: [{t:'medium',n:2},{t:'large',n:1}], mines: 2, drones: 2 },
-  { name: 'SECTOR ETA · SATELLITE GRAVEYARD', briefing: 'Dead satellites everywhere. Heavy drone patrols. Maximum caution.', debris: [{t:'small',n:14},{t:'medium',n:8},{t:'large',n:3}], asteroids: [{t:'large',n:2}], mines: 3, drones: 3 },
-  { name: 'SECTOR THETA · STORM FRONT', briefing: 'Multiple hazard zones converge. Mines and drones defend the perimeter.', debris: [{t:'small',n:16},{t:'medium',n:8},{t:'large',n:4}], asteroids: [{t:'medium',n:1},{t:'large',n:2}], mines: 5, drones: 2 },
-  { name: 'SECTOR IOTA · SIEGE MODE', briefing: 'Full-scale assault. All systems critical. Hold the line.', debris: [{t:'small',n:18},{t:'medium',n:10},{t:'large',n:5}], asteroids: [{t:'large',n:3}], mines: 6, drones: 4 },
-  { name: 'SECTOR KAPPA · FINAL STAND', briefing: 'Last known debris concentration. Finish this.', debris: [{t:'small',n:20},{t:'medium',n:12},{t:'large',n:6}], asteroids: [{t:'medium',n:2},{t:'large',n:3}], mines: 8, drones: 5 },
+  { name: 'SECTOR ALPHA · ENTRY ZONE', briefing: 'Clear the approach corridor and establish a presence.', debris: [{t:'small',n:4},{t:'medium',n:1}], asteroids: [{t:'small',n:3}], mines: 0, drone[...]
+  { name: 'SECTOR BETA · DEBRIS BELT', briefing: 'Dense debris field detected. Proximity mines litter the lane.', debris: [{t:'small',n:7},{t:'medium',n:3}], asteroids: [{t:'small',n:2},{t:'mediu[...]
+  { name: 'SECTOR GAMMA · ION STORM', briefing: 'Ion storm active — power bus vulnerability high. One hostile drone scouting.', debris: [{t:'small',n:8},{t:'medium',n:4},{t:'large',n:1}], aster[...]
+  { name: 'SECTOR DELTA · MINE FIELD', briefing: 'Scattered proximity mines blanket the sector. Advance with caution.', debris: [{t:'small',n:6},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:[...]
+  { name: 'SECTOR EPSILON · DRONE SWARM', briefing: 'Rogue mining drones have turned hostile. Neutralise the swarm.', debris: [{t:'small',n:10},{t:'medium',n:5},{t:'large',n:2}], asteroids: [{t:'[...]
+  { name: 'SECTOR ZETA · RADIATION BELT', briefing: 'Heavy radiation — hull integrity will decay. Drones are closing in.', debris: [{t:'small',n:12},{t:'medium',n:6},{t:'large',n:2}], asteroids[...]
+  { name: 'SECTOR ETA · SATELLITE GRAVEYARD', briefing: 'Dead satellites everywhere. Heavy drone patrols. Maximum caution.', debris: [{t:'small',n:14},{t:'medium',n:8},{t:'large',n:3}], asteroids[...]
+  { name: 'SECTOR THETA · STORM FRONT', briefing: 'Multiple hazard zones converge. Mines and drones defend the perimeter.', debris: [{t:'small',n:16},{t:'medium',n:8},{t:'large',n:4}], asteroids:[...]
+  { name: 'SECTOR IOTA · SIEGE MODE', briefing: 'Full-scale assault. All systems critical. Hold the line.', debris: [{t:'small',n:18},{t:'medium',n:10},{t:'large',n:5}], asteroids: [{t:'large',n:[...]
+  { name: 'SECTOR KAPPA · FINAL STAND', briefing: 'Last known debris concentration. Finish this.', debris: [{t:'small',n:20},{t:'medium',n:12},{t:'large',n:6}], asteroids: [{t:'medium',n:2},{t:'l[...]
 ];
 
 let G = null;
 
 function mkPlayer() {
-  return { x: CFG.world.w / 2, y: CFG.world.h / 2 + 60, vx: 0, vy: 0, angle: -Math.PI / 2, hull: CFG.player.maxHull, fuel: CFG.player.maxFuel, power: CFG.player.maxPower, nets: CFG.player.maxNets, ore: 0, totalOre: 0, laserCooldown: 0, miningTimer: 0, docked: false, dockTimer: 0 };
+  return { x: CFG.world.w / 2, y: CFG.world.h / 2 + 60, vx: 0, vy: 0, angle: -Math.PI / 2, hull: CFG.player.maxHull, fuel: CFG.player.maxFuel, power: CFG.player.maxPower, nets: CFG.player.maxNets,[...]
 }
 
 function initGame() {
-  G = { state: 'PLAYING', score: 0, wave: 1, debrisCleared: 0, netCaptures: 0, hazardTime: 0, tokens: 0, time: 0, player: mkPlayer(), debris: [], asteroids: [], particles: [], nets: [], ore: [], mines: [], drones: [], hazards: [], base: { x: CFG.world.w / 2, y: CFG.world.h / 2, r: 40 }, cam: { x: CFG.world.w / 2, y: CFG.world.h / 2 }, stars: genStars(), shakeTimer: 0, shakeAmt: 0, log: [], unlockedAchievements: new Set(), waveActive: true, waveGoals: {}, waveTokensEarned: 0, levelName: '' };
+  G = { state: 'PLAYING', score: 0, wave: 1, debrisCleared: 0, netCaptures: 0, hazardTime: 0, tokens: 0, time: 0, player: mkPlayer(), debris: [], asteroids: [], particles: [], nets: [], ore: [], m[...]
   spawnWave(1);
 }
 
@@ -127,7 +127,7 @@ function spawnWave(waveNum) {
       const pos = randomEdgePos();
       const dc = CFG.debris[d.t];
       const vel = randSpeed(dc.speed);
-      G.debris.push({ x: pos.x, y: pos.y, vx: vel.vx, vy: vel.vy, angle: Math.random() * Math.PI * 2, rotSpeed: (dc.rotSpeed[0] + Math.random() * (dc.rotSpeed[1] - dc.rotSpeed[0])) * (Math.random() < 0.5 ? 1 : -1), r: dc.r, hp: dc.hp, maxHp: dc.hp, pts: dc.pts, shape: mkDebrisShape(dc.r), type: d.t, id: 'D' + Math.random().toString(36).substr(2, 5), glint: Math.random() * Math.PI * 2 });
+      G.debris.push({ x: pos.x, y: pos.y, vx: vel.vx, vy: vel.vy, angle: Math.random() * Math.PI * 2, rotSpeed: (dc.rotSpeed[0] + Math.random() * (dc.rotSpeed[1] - dc.rotSpeed[0])) * (Math.random[...]
       totalDebris++;
     }
   });
@@ -136,7 +136,7 @@ function spawnWave(waveNum) {
       const pos = randomEdgePos();
       const ac = CFG.asteroid[a.t];
       const vel = randSpeed(ac.speed);
-      G.asteroids.push({ x: pos.x, y: pos.y, vx: vel.vx, vy: vel.vy, angle: Math.random() * Math.PI * 2, rotSpeed: (0.02 + Math.random() * 0.12) * (Math.random() < 0.5 ? 1 : -1), r: ac.r, ore: ac.ore, maxOre: ac.ore, shape: mkAsteroidShape(ac.r), id: 'A' + Math.random().toString(36).substr(2, 5) });
+      G.asteroids.push({ x: pos.x, y: pos.y, vx: vel.vx, vy: vel.vy, angle: Math.random() * Math.PI * 2, rotSpeed: (0.02 + Math.random() * 0.12) * (Math.random() < 0.5 ? 1 : -1), r: ac.r, ore: ac[...]
     }
   });
   spawnHazards(waveNum);
@@ -170,7 +170,7 @@ function spawnMines(count) {
     const pos = randomEdgePos(200);
     const drift = (Math.random() - 0.5) * 6;
     const drift2 = (Math.random() - 0.5) * 6;
-    G.mines.push({ x: pos.x, y: pos.y, vx: drift, vy: drift2, r: mc.r, hp: mc.hp, maxHp: mc.hp, armed: true, beeping: false, countdown: 0, beepTimer: 0, pulse: Math.random() * Math.PI * 2, id: 'M' + Math.random().toString(36).substr(2, 5) });
+    G.mines.push({ x: pos.x, y: pos.y, vx: drift, vy: drift2, r: mc.r, hp: mc.hp, maxHp: mc.hp, armed: true, beeping: false, countdown: 0, beepTimer: 0, pulse: Math.random() * Math.PI * 2, id: 'M[...]
   }
   if (count > 0) addLog(count + ' proximity mine(s) deployed in sector', 'warn');
 }
@@ -181,7 +181,7 @@ function spawnDrones(count) {
   for (let i = 0; i < count; i++) {
     const pos = randomEdgePos(400);
     const patrolAngle = Math.random() * Math.PI * 2;
-    G.drones.push({ x: pos.x, y: pos.y, vx: Math.cos(patrolAngle) * dc.speed * 0.3, vy: Math.sin(patrolAngle) * dc.speed * 0.3, r: dc.r, hp: dc.hp, maxHp: dc.hp, angle: patrolAngle, state: 'patrol', patrolAngle: patrolAngle, patrolTimer: 2 + Math.random() * 3, id: 'DR' + Math.random().toString(36).substr(2, 5) });
+    G.drones.push({ x: pos.x, y: pos.y, vx: Math.cos(patrolAngle) * dc.speed * 0.3, vy: Math.sin(patrolAngle) * dc.speed * 0.3, r: dc.r, hp: dc.hp, maxHp: dc.hp, angle: patrolAngle, state: 'patro[...]
   }
   if (count > 0) addLog(count + ' hostile drone(s) detected in sector', 'crit');
 }
@@ -208,7 +208,7 @@ function checkAndUnlockAchievements() {
 function showAchievementToast(achievement) {
   const toast = document.createElement('div');
   toast.className = 'achievement-toast';
-  toast.innerHTML = `<div class="achievement-title">✦ ${achievement.label}</div><div>${achievement.desc}</div><div class="achievement-reward"><span class="crypto-badge">+${achievement.tokens} Tokens◆</span></div>`;
+  toast.innerHTML = `<div class="achievement-title">✦ ${achievement.label}</div><div>${achievement.desc}</div><div class="achievement-reward"><span class="crypto-badge">+${achievement.tokens} T[...]
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 4000);
 }
@@ -265,13 +265,13 @@ function spawnThrustParticle(p) {
   const spread = 0.35;
   const a = back + (Math.random() - 0.5) * spread;
   const s = 80 + Math.random() * 120;
-  G.particles.push({ x: p.x + Math.cos(back) * 22, y: p.y + Math.sin(back) * 22, vx: Math.cos(a) * s + p.vx * 0.4, vy: Math.sin(a) * s + p.vy * 0.4, life: 0.25 + Math.random() * 0.2, maxLife: 0.4, color: 'rgba(100,200,255,.8)', r: 2 + Math.random() * 1.5 });
+  G.particles.push({ x: p.x + Math.cos(back) * 22, y: p.y + Math.sin(back) * 22, vx: Math.cos(a) * s + p.vx * 0.4, vy: Math.sin(a) * s + p.vy * 0.4, life: 0.25 + Math.random() * 0.2, maxLife: 0.4[...]
 }
 
 function spawnMineParticle(x, y) {
   const a = Math.random() * Math.PI * 2;
   const s = 30 + Math.random() * 60;
-  G.particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: 0.4+Math.random()*0.4, maxLife:0.8, color: ['#ffc846','#ff8040','#ffaa00'][Math.floor(Math.random()*3)], r: 1 + Math.random() * 2 });
+  G.particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: 0.4+Math.random()*0.4, maxLife:0.8, color: ['#ffc846','#ff8040','#ffaa00'][Math.floor(Math.random()*3)], r: 1 + Math.random([...]
 }
 
 function spawnExplosion(x, y, size) {
@@ -361,7 +361,7 @@ function deployNet() {
   const dx = mx - p.x, dy = my - p.y;
   const d = Math.hypot(dx, dy) || 1;
   const spd = CFG.net.speed;
-  G.nets.push({ x: p.x, y: p.y, vx: (dx/d) * spd, vy: (dy/d) * spd, radius: 0, maxRadius: CFG.net.maxRadius, life: CFG.net.lifetime, maxLife: CFG.net.lifetime, active: true, caught: [], expanding: true, expandTimer: 0 });
+  G.nets.push({ x: p.x, y: p.y, vx: (dx/d) * spd, vy: (dy/d) * spd, radius: 0, maxRadius: CFG.net.maxRadius, life: CFG.net.lifetime, maxLife: CFG.net.lifetime, active: true, caught: [], expanding[...]
   p.nets--;
   addLog('Net deployed toward ' + (Math.round(Math.atan2(dy,dx)*180/Math.PI)) + '°', 'info');
   G.shakeTimer = 0.05; G.shakeAmt = 1;
@@ -655,62 +655,171 @@ function renderSatellite(dr, ctx) {
   ctx.rotate(dr.angle);
   
   // Main body - rectangular satellite bus
-  ctx.fillStyle = '#7a5ccc';
-  ctx.fillRect(-8, -6, 16, 12);
+  ctx.fillStyle = '#5a4aff';
+  ctx.fillRect(-9, -7, 18, 14);
   
-  // Body detail/window
-  ctx.fillStyle = '#9f7fff';
-  ctx.fillRect(-6, -4, 12, 3);
+  // Body highlight edge
+  ctx.strokeStyle = '#7a6aff';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-9, -7, 18, 14);
   
-  // Solar panel 1 (left wing)
-  ctx.fillStyle = '#2d5a9f';
-  ctx.fillRect(-14, -4, 6, 8);
-  ctx.fillStyle = '#4a7bc4';
-  for (let i = 0; i < 3; i++) {
-    ctx.fillRect(-13, -3 + i * 3, 4, 2);
+  // Central core
+  ctx.fillStyle = '#3a2aff';
+  ctx.fillRect(-6, -4, 12, 8);
+  
+  // Body accent/window with glow
+  ctx.fillStyle = '#ff00ff';
+  ctx.fillRect(-3, -2, 6, 4);
+  ctx.shadowColor = '#ff00ff';
+  ctx.shadowBlur = 8;
+  
+  // Left solar panel
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = '#1a4a9f';
+  ctx.fillRect(-16, -5, 7, 10);
+  ctx.fillStyle = '#2a6abf';
+  for (let i = 0; i < 4; i++) {
+    ctx.fillRect(-15, -4 + i * 2.5, 5, 2);
   }
   
-  // Solar panel 2 (right wing)
-  ctx.fillStyle = '#2d5a9f';
-  ctx.fillRect(8, -4, 6, 8);
-  ctx.fillStyle = '#4a7bc4';
-  for (let i = 0; i < 3; i++) {
-    ctx.fillRect(9, -3 + i * 3, 4, 2);
+  // Right solar panel  
+  ctx.fillStyle = '#1a4a9f';
+  ctx.fillRect(9, -5, 7, 10);
+  ctx.fillStyle = '#2a6abf';
+  for (let i = 0; i < 4; i++) {
+    ctx.fillRect(10, -4 + i * 2.5, 5, 2);
   }
   
-  // Antenna
-  ctx.strokeStyle = '#b06aff';
+  // Top antenna array
+  ctx.strokeStyle = '#ff66ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -7);
+  ctx.lineTo(-3, -15);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0, -7);
+  ctx.lineTo(3, -15);
+  ctx.stroke();
+  
+  // Antenna tips with glow
+  ctx.fillStyle = '#ff00ff';
+  ctx.shadowColor = '#ff00ff';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.arc(-3, -15, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(3, -15, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  
+  // Bottom thruster ports
+  ctx.fillStyle = '#ff6b35';
+  ctx.fillRect(-4, 9, 2, 4);
+  ctx.fillRect(2, 9, 2, 4);
+  ctx.fillStyle = 'rgba(255, 107, 53, 0.6)';
+  ctx.fillRect(-4, 9, 2, 4);
+  ctx.fillRect(2, 9, 2, 4);
+  
+  // Directional indicator lights
+  ctx.fillStyle = '#00ff00';
+  ctx.beginPath();
+  ctx.arc(-10, 0, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ff0000';
+  ctx.beginPath();
+  ctx.arc(10, 0, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Active state glow aura
+  if (dr.state === 'chase') {
+    ctx.shadowColor = '#ff00ff';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = 'rgba(255, 0, 255, 0.2)';
+    ctx.beginPath();
+    ctx.arc(0, 0, dr.r + 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+  }
+  
+  ctx.restore();
+}
+
+// Enhanced base station rendering
+function renderBase(baseObj, ctx) {
+  ctx.save();
+  ctx.translate(baseObj.x, baseObj.y);
+  
+  // Outer defensive ring
+  ctx.strokeStyle = '#00ff88';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 0, 45, 0, Math.PI * 2);
+  ctx.stroke();
+  
+  // Secondary ring
+  ctx.strokeStyle = 'rgba(0, 255, 136, 0.5)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(0, -6);
-  ctx.lineTo(2, -14);
+  ctx.arc(0, 0, 38, 0, Math.PI * 2);
   ctx.stroke();
   
+  // Main base structure - hexagon
+  ctx.fillStyle = '#00d488';
   ctx.beginPath();
-  ctx.moveTo(0, -6);
-  ctx.lineTo(-2, -14);
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+    const x = Math.cos(angle) * 30;
+    const y = Math.sin(angle) * 30;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#00ff88';
+  ctx.lineWidth = 2;
   ctx.stroke();
   
-  // Antenna tips (small circles)
-  ctx.fillStyle = '#ff00ff';
+  // Inner hexagon accent
+  ctx.fillStyle = '#00a060';
   ctx.beginPath();
-  ctx.arc(2, -14, 1.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(-2, -14, 1.5, 0, Math.PI * 2);
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+    const x = Math.cos(angle) * 18;
+    const y = Math.sin(angle) * 18;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
   ctx.fill();
   
-  // Thruster/engine glow
-  ctx.fillStyle = '#ff6b35';
-  ctx.fillRect(-3, 8, 2, 3);
-  ctx.fillRect(1, 8, 2, 3);
+  // Central core with glow
+  ctx.fillStyle = '#00ff88';
+  ctx.shadowColor = '#00ff88';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(0, 0, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
   
-  // Glow effect when active
-  if (dr.state === 'chase') {
-    ctx.fillStyle = 'rgba(255, 107, 53, 0.4)';
+  // Docking ports (6 around the base)
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+    const x = Math.cos(angle) * 38;
+    const y = Math.sin(angle) * 38;
+    ctx.fillStyle = '#00ff88';
+    ctx.fillRect(x - 3, y - 3, 6, 6);
+  }
+  
+  // Rotating detection array
+  ctx.strokeStyle = 'rgba(0, 255, 136, 0.3)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 3; i++) {
+    const r = 25 + i * 5;
     ctx.beginPath();
-    ctx.arc(0, 0, dr.r + 4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
   }
   
   ctx.restore();
@@ -832,15 +941,8 @@ function render(dt) {
     ctx.stroke();
   }
   
-  // Base station
-  const b = G.base;
-  ctx.fillStyle = '#00e5a0';
-  ctx.beginPath();
-  ctx.arc(b.x, b.y, 40, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#00e5a0';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  // Base station with new graphics
+  renderBase(G.base, ctx);
   
   // Asteroids
   G.asteroids.forEach(a => {
@@ -919,7 +1021,7 @@ function render(dt) {
     ctx.restore();
   });
   
-  // Enhanced drones/satellites
+  // Enhanced drones/satellites with new graphics
   G.drones.forEach(dr => {
     renderSatellite(dr, ctx);
   });
