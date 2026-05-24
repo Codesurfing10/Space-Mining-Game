@@ -16,11 +16,11 @@ const CFG = {
   net: { speed: 240, maxRadius: 130, expandTime: 1.4, lifetime: 9, catchRange: 30 },
   mine: { rate: 18, range: 90, powerDrain: 8 },
   base: { dockRange: 80, refuelRate: 40, repairRate: 30, reloadRate: 2 },
-  debris: { small: { r: 8, hp: 60, pts: 100, speed: [20,55], rotSpeed: [0.5,2.5] }, medium: { r: 18, hp: 160, pts: 250, speed: [12,35], rotSpeed: [0.2,1.2] }, large: { r: 34, hp: 400, pts: 500, sp[...]
+  debris: { small: { r: 8, hp: 60, pts: 100, speed: [20,55], rotSpeed: [0.5,2.5] }, medium: { r: 18, hp: 160, pts: 250, speed: [12,35], rotSpeed: [0.2,1.2] }, large: { r: 34, hp: 400, pts: 500, speed: [8,25], rotSpeed: [0.1,0.8] } },
   asteroid: { small: { r: 28, ore: 60, speed: [5,18] }, medium: { r: 48, ore: 130, speed: [3,12] }, large: { r: 72, ore: 260, speed: [2,8] } },
   netBonusMult: 1.5,
   waveBonusBase: 500,
-  hazard: { radiation: { hullDrain: 6, powerDrain: 0, fuelDrain: 0, col: '#ff4060', name: 'RADIATION BELT' }, ion_storm: { hullDrain: 0, powerDrain: 18, fuelDrain: 0, col: '#b06aff', name: 'ION ST[...]
+  hazard: { radiation: { hullDrain: 6, powerDrain: 0, fuelDrain: 0, col: '#ff4060', name: 'RADIATION BELT' }, ion_storm: { hullDrain: 0, powerDrain: 18, fuelDrain: 0, col: '#b06aff', name: 'ION STORM' }, debris_cloud: { hullDrain: 2, powerDrain: 4, fuelDrain: 0, col: '#ff8800', name: 'DEBRIS CLOUD' } },
   mine_obs: { r: 16, hp: 30, pts: 60, proximityR: 58, countdown: 2.0, damage: 42 },
   drone: { r: 14, hp: 120, pts: 300, speed: 78, alertR: 390, ramDamage: 14 },
   radar: { range: 800, radarSize: 120, centerX: 0, centerY: 0 },
@@ -41,26 +41,26 @@ const ACHIEVEMENTS = [
 ];
 
 const WAVES = [
-  { name: 'SECTOR ALPHA · ENTRY ZONE', briefing: 'Clear the approach corridor and establish a presence.', debris: [{t:'small',n:4},{t:'medium',n:1}], asteroids: [{t:'small',n:3}], mines: 0, drone[...]
-  { name: 'SECTOR BETA · DEBRIS BELT', briefing: 'Dense debris field detected. Proximity mines litter the lane.', debris: [{t:'small',n:7},{t:'medium',n:3}], asteroids: [{t:'small',n:2},{t:'mediu[...]
-  { name: 'SECTOR GAMMA · ION STORM', briefing: 'Ion storm active — power bus vulnerability high. One hostile drone scouting.', debris: [{t:'small',n:8},{t:'medium',n:4},{t:'large',n:1}], aster[...]
-  { name: 'SECTOR DELTA · MINE FIELD', briefing: 'Scattered proximity mines blanket the sector. Advance with caution.', debris: [{t:'small',n:6},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:[...]
-  { name: 'SECTOR EPSILON · DRONE SWARM', briefing: 'Rogue mining drones have turned hostile. Neutralise the swarm.', debris: [{t:'small',n:10},{t:'medium',n:5},{t:'large',n:2}], asteroids: [{t:'[...]
-  { name: 'SECTOR ZETA · RADIATION BELT', briefing: 'Heavy radiation — hull integrity will decay. Drones are closing in.', debris: [{t:'small',n:12},{t:'medium',n:6},{t:'large',n:2}], asteroids[...]
-  { name: 'SECTOR ETA · SATELLITE GRAVEYARD', briefing: 'Dead satellites everywhere. Heavy drone patrols. Maximum caution.', debris: [{t:'small',n:14},{t:'medium',n:8},{t:'large',n:3}], asteroids[...]
-  { name: 'SECTOR THETA · STORM FRONT', briefing: 'Multiple hazard zones converge. Mines and drones defend the perimeter.', debris: [{t:'small',n:16},{t:'medium',n:8},{t:'large',n:4}], asteroids:[...]
-  { name: 'SECTOR IOTA · SIEGE MODE', briefing: 'Full-scale assault. All systems critical. Hold the line.', debris: [{t:'small',n:18},{t:'medium',n:10},{t:'large',n:5}], asteroids: [{t:'large',n:[...]
-  { name: 'SECTOR KAPPA · FINAL STAND', briefing: 'Last known debris concentration. Finish this.', debris: [{t:'small',n:20},{t:'medium',n:12},{t:'large',n:6}], asteroids: [{t:'medium',n:2},{t:'l[...]
+  { name: 'SECTOR ALPHA · ENTRY ZONE', briefing: 'Clear the approach corridor and establish a presence.', debris: [{t:'small',n:4},{t:'medium',n:1}], asteroids: [{t:'small',n:3}], mines: 0, drones: 0, oreTarget: 50 },
+  { name: 'SECTOR BETA · DEBRIS BELT', briefing: 'Dense debris field detected. Proximity mines litter the lane.', debris: [{t:'small',n:7},{t:'medium',n:3}], asteroids: [{t:'small',n:2},{t:'medium',n:1}], mines: 3, drones: 0, oreTarget: 100 },
+  { name: 'SECTOR GAMMA · ION STORM', briefing: 'Ion storm active — power bus vulnerability high. One hostile drone scouting.', debris: [{t:'small',n:8},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:'medium',n:2}], mines: 2, drones: 1, oreTarget: 150 },
+  { name: 'SECTOR DELTA · MINE FIELD', briefing: 'Scattered proximity mines blanket the sector. Advance with caution.', debris: [{t:'small',n:6},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:'small',n:1},{t:'medium',n:1}], mines: 6, drones: 0, oreTarget: 120 },
+  { name: 'SECTOR EPSILON · DRONE SWARM', briefing: 'Rogue mining drones have turned hostile. Neutralise the swarm.', debris: [{t:'small',n:10},{t:'medium',n:5},{t:'large',n:2}], asteroids: [{t:'medium',n:2},{t:'large',n:1}], mines: 1, drones: 3, oreTarget: 200 },
+  { name: 'SECTOR ZETA · RADIATION BELT', briefing: 'Heavy radiation — hull integrity will decay. Drones are closing in.', debris: [{t:'small',n:12},{t:'medium',n:6},{t:'large',n:2}], asteroids: [{t:'medium',n:1},{t:'large',n:1}], mines: 4, drones: 2, oreTarget: 250 },
+  { name: 'SECTOR ETA · SATELLITE GRAVEYARD', briefing: 'Dead satellites everywhere. Heavy drone patrols. Maximum caution.', debris: [{t:'small',n:14},{t:'medium',n:8},{t:'large',n:3}], asteroids: [{t:'large',n:2}], mines: 3, drones: 4, oreTarget: 300 },
+  { name: 'SECTOR THETA · STORM FRONT', briefing: 'Multiple hazard zones converge. Mines and drones defend the perimeter.', debris: [{t:'small',n:16},{t:'medium',n:8},{t:'large',n:4}], asteroids: [{t:'medium',n:1},{t:'large',n:2}], mines: 5, drones: 3, oreTarget: 350 },
+  { name: 'SECTOR IOTA · SIEGE MODE', briefing: 'Full-scale assault. All systems critical. Hold the line.', debris: [{t:'small',n:18},{t:'medium',n:10},{t:'large',n:5}], asteroids: [{t:'large',n:3}], mines: 8, drones: 5, oreTarget: 400 },
+  { name: 'SECTOR KAPPA · FINAL STAND', briefing: 'Last known debris concentration. Finish this.', debris: [{t:'small',n:20},{t:'medium',n:12},{t:'large',n:6}], asteroids: [{t:'medium',n:2},{t:'large',n:3}], mines: 10, drones: 6, oreTarget: 500 },
 ];
 
 let G = null;
 
 function mkPlayer() {
-  return { x: CFG.world.w / 2, y: CFG.world.h / 2 + 60, vx: 0, vy: 0, angle: -Math.PI / 2, hull: CFG.player.maxHull, fuel: CFG.player.maxFuel, power: CFG.player.maxPower, nets: CFG.player.maxNets,[...]
+  return { x: CFG.world.w / 2, y: CFG.world.h / 2 + 60, vx: 0, vy: 0, angle: -Math.PI / 2, hull: CFG.player.maxHull, fuel: CFG.player.maxFuel, power: CFG.player.maxPower, nets: CFG.player.maxNets, ore: 0, totalOre: 0, laserCooldown: 0, miningTimer: 0, docked: false, dockTimer: 0 };
 }
 
 function initGame() {
-  G = { state: 'PLAYING', score: 0, wave: 1, debrisCleared: 0, netCaptures: 0, hazardTime: 0, tokens: 0, time: 0, player: mkPlayer(), debris: [], asteroids: [], particles: [], nets: [], ore: [], m[...]
+  G = { state: 'PLAYING', score: 0, wave: 1, debrisCleared: 0, netCaptures: 0, hazardTime: 0, tokens: 0, time: 0, player: mkPlayer(), debris: [], asteroids: [], particles: [], nets: [], ore: [], mines: [], drones: [], hazards: [], base: { x: CFG.world.w / 2, y: CFG.world.h / 2, r: 40 }, cam: { x: CFG.world.w / 2, y: CFG.world.h / 2 }, stars: genStars(), log: [], waveGoals: {}, waveActive: true, unlockedAchievements: new Set(), shakeTimer: 0, shakeAmt: 0, levelName: '' };
   spawnWave(1);
 }
 
@@ -127,7 +127,7 @@ function spawnWave(waveNum) {
       const pos = randomEdgePos();
       const dc = CFG.debris[d.t];
       const vel = randSpeed(dc.speed);
-      G.debris.push({ x: pos.x, y: pos.y, vx: vel.vx, vy: vel.vy, angle: Math.random() * Math.PI * 2, rotSpeed: (dc.rotSpeed[0] + Math.random() * (dc.rotSpeed[1] - dc.rotSpeed[0])) * (Math.random[...]
+      G.debris.push({ x: pos.x, y: pos.y, vx: vel.vx, vy: vel.vy, angle: Math.random() * Math.PI * 2, rotSpeed: (dc.rotSpeed[0] + Math.random() * (dc.rotSpeed[1] - dc.rotSpeed[0])) * (Math.random() < 0.5 ? 1 : -1), r: dc.r, type: d.t, hp: dc.hp, maxHp: dc.hp, pts: dc.pts, shape: mkDebrisShape(dc.r), glint: 0, id: 'D' + Math.random().toString(36).substr(2, 9) });
       totalDebris++;
     }
   });
@@ -136,7 +136,7 @@ function spawnWave(waveNum) {
       const pos = randomEdgePos();
       const ac = CFG.asteroid[a.t];
       const vel = randSpeed(ac.speed);
-      G.asteroids.push({ x: pos.x, y: pos.y, vx: vel.vx, vy: vel.vy, angle: Math.random() * Math.PI * 2, rotSpeed: (0.02 + Math.random() * 0.12) * (Math.random() < 0.5 ? 1 : -1), r: ac.r, ore: ac[...]
+      G.asteroids.push({ x: pos.x, y: pos.y, vx: vel.vx, vy: vel.vy, angle: Math.random() * Math.PI * 2, rotSpeed: (0.02 + Math.random() * 0.12) * (Math.random() < 0.5 ? 1 : -1), r: ac.r, ore: ac.ore, maxOre: ac.ore, shape: mkAsteroidShape(ac.r), id: 'A' + Math.random().toString(36).substr(2, 9) });
     }
   });
   spawnHazards(waveNum);
@@ -170,7 +170,7 @@ function spawnMines(count) {
     const pos = randomEdgePos(200);
     const drift = (Math.random() - 0.5) * 6;
     const drift2 = (Math.random() - 0.5) * 6;
-    G.mines.push({ x: pos.x, y: pos.y, vx: drift, vy: drift2, r: mc.r, hp: mc.hp, maxHp: mc.hp, armed: true, beeping: false, countdown: 0, beepTimer: 0, pulse: Math.random() * Math.PI * 2, id: 'M[...]
+    G.mines.push({ x: pos.x, y: pos.y, vx: drift, vy: drift2, r: mc.r, hp: mc.hp, maxHp: mc.hp, armed: true, beeping: false, countdown: 0, beepTimer: 0, pulse: Math.random() * Math.PI * 2, id: 'M' + Math.random().toString(36).substr(2, 9) });
   }
   if (count > 0) addLog(count + ' proximity mine(s) deployed in sector', 'warn');
 }
@@ -181,7 +181,7 @@ function spawnDrones(count) {
   for (let i = 0; i < count; i++) {
     const pos = randomEdgePos(400);
     const patrolAngle = Math.random() * Math.PI * 2;
-    G.drones.push({ x: pos.x, y: pos.y, vx: Math.cos(patrolAngle) * dc.speed * 0.3, vy: Math.sin(patrolAngle) * dc.speed * 0.3, r: dc.r, hp: dc.hp, maxHp: dc.hp, angle: patrolAngle, state: 'patro[...]
+    G.drones.push({ x: pos.x, y: pos.y, vx: Math.cos(patrolAngle) * dc.speed * 0.3, vy: Math.sin(patrolAngle) * dc.speed * 0.3, r: dc.r, hp: dc.hp, maxHp: dc.hp, angle: patrolAngle, state: 'patrol', patrolTimer: 2 + Math.random() * 3, patrolAngle: patrolAngle, id: 'D' + Math.random().toString(36).substr(2, 9) });
   }
   if (count > 0) addLog(count + ' hostile drone(s) detected in sector', 'crit');
 }
@@ -208,7 +208,7 @@ function checkAndUnlockAchievements() {
 function showAchievementToast(achievement) {
   const toast = document.createElement('div');
   toast.className = 'achievement-toast';
-  toast.innerHTML = `<div class="achievement-title">✦ ${achievement.label}</div><div>${achievement.desc}</div><div class="achievement-reward"><span class="crypto-badge">+${achievement.tokens} T[...]
+  toast.innerHTML = `<div class="achievement-title">✦ ${achievement.label}</div><div>${achievement.desc}</div><div class="achievement-reward"><span class="crypto-badge">+${achievement.tokens} TOKENS◆</span></div>`;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 4000);
 }
@@ -265,13 +265,13 @@ function spawnThrustParticle(p) {
   const spread = 0.35;
   const a = back + (Math.random() - 0.5) * spread;
   const s = 80 + Math.random() * 120;
-  G.particles.push({ x: p.x + Math.cos(back) * 22, y: p.y + Math.sin(back) * 22, vx: Math.cos(a) * s + p.vx * 0.4, vy: Math.sin(a) * s + p.vy * 0.4, life: 0.25 + Math.random() * 0.2, maxLife: 0.4[...]
+  G.particles.push({ x: p.x + Math.cos(back) * 22, y: p.y + Math.sin(back) * 22, vx: Math.cos(a) * s + p.vx * 0.4, vy: Math.sin(a) * s + p.vy * 0.4, life: 0.25 + Math.random() * 0.2, maxLife: 0.4, color: '#ff8800', r: 2 });
 }
 
 function spawnMineParticle(x, y) {
   const a = Math.random() * Math.PI * 2;
   const s = 30 + Math.random() * 60;
-  G.particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: 0.4+Math.random()*0.4, maxLife:0.8, color: ['#ffc846','#ff8040','#ffaa00'][Math.floor(Math.random()*3)], r: 1 + Math.random([...]
+  G.particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: 0.4+Math.random()*0.4, maxLife:0.8, color: ['#ffc846','#ff8040','#ffaa00'][Math.floor(Math.random()*3)], r: 1 + Math.random() * 1.5 });
 }
 
 function spawnExplosion(x, y, size) {
@@ -361,7 +361,7 @@ function deployNet() {
   const dx = mx - p.x, dy = my - p.y;
   const d = Math.hypot(dx, dy) || 1;
   const spd = CFG.net.speed;
-  G.nets.push({ x: p.x, y: p.y, vx: (dx/d) * spd, vy: (dy/d) * spd, radius: 0, maxRadius: CFG.net.maxRadius, life: CFG.net.lifetime, maxLife: CFG.net.lifetime, active: true, caught: [], expanding[...]
+  G.nets.push({ x: p.x, y: p.y, vx: (dx/d) * spd, vy: (dy/d) * spd, radius: 0, maxRadius: CFG.net.maxRadius, life: CFG.net.lifetime, maxLife: CFG.net.lifetime, active: true, caught: [], expanding: true, expandTimer: 0 });
   p.nets--;
   addLog('Net deployed toward ' + (Math.round(Math.atan2(dy,dx)*180/Math.PI)) + '°', 'info');
   G.shakeTimer = 0.05; G.shakeAmt = 1;
