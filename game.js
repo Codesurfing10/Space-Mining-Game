@@ -648,100 +648,133 @@ function gameLoop() {
   requestAnimationFrame(gameLoop);
 }
 
-// Enhanced satellite/drone rendering with improved graphics
-// Called from WITHIN camera transformation context - uses world coords
+// MEGA SATELLITE: Larger with improved graphics and enhanced details
 function renderSatellite(dr, ctx) {
   ctx.save();
   ctx.translate(dr.x, dr.y);
   ctx.rotate(dr.angle);
   
-  // Main body - rectangular satellite bus
-  ctx.fillStyle = '#5a4aff';
-  ctx.fillRect(-9, -7, 18, 14);
+  const scale = 2.2; // Scale factor for size increase
   
-  // Body highlight edge
-  ctx.strokeStyle = '#7a6aff';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(-9, -7, 18, 14);
+  // OUTER SHELL - Main body - rectangular satellite bus
+  ctx.fillStyle = '#6a5aff';
+  ctx.fillRect(-20 * scale, -16 * scale, 40 * scale, 32 * scale);
   
-  // Central core
+  // Body highlight edge - dual stripe design
+  ctx.strokeStyle = '#8a7aff';
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(-20 * scale, -16 * scale, 40 * scale, 32 * scale);
+  
+  // Middle accent stripe
+  ctx.fillStyle = '#4a3aff';
+  ctx.fillRect(-20 * scale, -4 * scale, 40 * scale, 8 * scale);
+  
+  // Central core - pulsing element
   ctx.fillStyle = '#3a2aff';
-  ctx.fillRect(-6, -4, 12, 8);
+  ctx.fillRect(-14 * scale, -8 * scale, 28 * scale, 16 * scale);
   
-  // Body accent/window with glow
+  // Body accent/window with intense glow
   ctx.fillStyle = '#ff00ff';
-  ctx.fillRect(-3, -2, 6, 4);
   ctx.shadowColor = '#ff00ff';
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = 15;
+  ctx.fillRect(-8 * scale, -5 * scale, 16 * scale, 10 * scale);
   
-  // Left solar panel
+  // Secondary window
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#00ffff';
+  ctx.fillRect(-4 * scale, -2 * scale, 8 * scale, 4 * scale);
+  
+  // Left solar panel array - LARGE
   ctx.shadowColor = 'transparent';
-  ctx.fillStyle = '#1a4a9f';
-  ctx.fillRect(-16, -5, 7, 10);
-  ctx.fillStyle = '#2a6abf';
-  for (let i = 0; i < 4; i++) {
-    ctx.fillRect(-15, -4 + i * 2.5, 5, 2);
+  ctx.fillStyle = '#1a5a9f';
+  ctx.fillRect(-35 * scale, -12 * scale, 16 * scale, 24 * scale);
+  ctx.fillStyle = '#2a7abf';
+  ctx.strokeStyle = '#3a9aff';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 6; i++) {
+    const y = -10 * scale + i * 4 * scale;
+    ctx.fillRect(-34 * scale, y, 14 * scale, 3 * scale);
+    ctx.strokeRect(-34 * scale, y, 14 * scale, 3 * scale);
   }
   
-  // Right solar panel  
-  ctx.fillStyle = '#1a4a9f';
-  ctx.fillRect(9, -5, 7, 10);
-  ctx.fillStyle = '#2a6abf';
-  for (let i = 0; i < 4; i++) {
-    ctx.fillRect(10, -4 + i * 2.5, 5, 2);
+  // Right solar panel array - LARGE
+  ctx.fillStyle = '#1a5a9f';
+  ctx.fillRect(19 * scale, -12 * scale, 16 * scale, 24 * scale);
+  ctx.fillStyle = '#2a7abf';
+  ctx.strokeStyle = '#3a9aff';
+  for (let i = 0; i < 6; i++) {
+    const y = -10 * scale + i * 4 * scale;
+    ctx.fillRect(20 * scale, y, 14 * scale, 3 * scale);
+    ctx.strokeRect(20 * scale, y, 14 * scale, 3 * scale);
   }
   
-  // Top antenna array
+  // Top antenna array - MASSIVE
   ctx.strokeStyle = '#ff66ff';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, -7);
-  ctx.lineTo(-3, -15);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(0, -7);
-  ctx.lineTo(3, -15);
-  ctx.stroke();
+  ctx.lineWidth = 3;
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 8 * scale, -16 * scale);
+    ctx.lineTo(i * 12 * scale, -28 * scale);
+    ctx.stroke();
+  }
   
-  // Antenna tips with glow
+  // Antenna tips with intense glow
   ctx.fillStyle = '#ff00ff';
   ctx.shadowColor = '#ff00ff';
-  ctx.shadowBlur = 6;
-  ctx.beginPath();
-  ctx.arc(-3, -15, 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(3, -15, 2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.shadowBlur = 12;
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.arc(i * 12 * scale, -28 * scale, 3.5 * scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  // Bottom thruster ports - GLOWING
   ctx.shadowColor = 'transparent';
-  
-  // Bottom thruster ports
   ctx.fillStyle = '#ff6b35';
-  ctx.fillRect(-4, 9, 2, 4);
-  ctx.fillRect(2, 9, 2, 4);
-  ctx.fillStyle = 'rgba(255, 107, 53, 0.6)';
-  ctx.fillRect(-4, 9, 2, 4);
-  ctx.fillRect(2, 9, 2, 4);
+  ctx.fillRect(-12 * scale, 16 * scale, 5 * scale, 8 * scale);
+  ctx.fillRect(7 * scale, 16 * scale, 5 * scale, 8 * scale);
+  ctx.fillStyle = 'rgba(255, 107, 53, 0.8)';
+  ctx.shadowColor = '#ff6b35';
+  ctx.shadowBlur = 10;
+  ctx.fillRect(-12 * scale, 16 * scale, 5 * scale, 8 * scale);
+  ctx.fillRect(7 * scale, 16 * scale, 5 * scale, 8 * scale);
   
-  // Directional indicator lights
+  // Directional indicator lights - LED style
+  ctx.shadowColor = 'transparent';
   ctx.fillStyle = '#00ff00';
+  ctx.shadowColor = '#00ff00';
+  ctx.shadowBlur = 8;
   ctx.beginPath();
-  ctx.arc(-10, 0, 1.5, 0, Math.PI * 2);
+  ctx.arc(-22 * scale, 0, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#ff0000';
+  ctx.shadowColor = '#ff0000';
   ctx.beginPath();
-  ctx.arc(10, 0, 1.5, 0, Math.PI * 2);
+  ctx.arc(22 * scale, 0, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
   
-  // Active state glow aura
+  // Center marker - pulsing element
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = '#ffff00';
+  ctx.beginPath();
+  ctx.arc(0, 0, 2 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Active state glow aura - STRONGER
   if (dr.state === 'chase') {
     ctx.shadowColor = '#ff00ff';
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = 'rgba(255, 0, 255, 0.2)';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = 'rgba(255, 0, 255, 0.3)';
     ctx.beginPath();
-    ctx.arc(0, 0, dr.r + 5, 0, Math.PI * 2);
+    ctx.arc(0, 0, (dr.r + 15) * scale, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowColor = 'transparent';
+    
+    // Danger pulse
+    ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, (dr.r + 18) * scale, 0, Math.PI * 2);
+    ctx.stroke();
   }
   
   ctx.restore();
@@ -1023,7 +1056,7 @@ function render(dt) {
     ctx.restore();
   });
   
-  // Enhanced drones/satellites with new graphics - FIXED: now in camera transform, uses world coords
+  // MEGA satellites with improved graphics - FIXED: now in camera transform, uses world coords
   G.drones.forEach(dr => {
     renderSatellite(dr, ctx);
   });
@@ -1049,7 +1082,7 @@ function render(dt) {
     ctx.restore();
   });
   
-  // Particles
+  // Particles (including thruster fire)
   G.particles.forEach(p => {
     ctx.fillStyle = p.color;
     ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
