@@ -649,9 +649,10 @@ function gameLoop() {
 }
 
 // Enhanced satellite/drone rendering with improved graphics
-function renderSatellite(dr, camX, camY, ctx) {
+// Called from WITHIN camera transformation context - uses world coords
+function renderSatellite(dr, ctx) {
   ctx.save();
-  ctx.translate(dr.x - camX, dr.y - camY);
+  ctx.translate(dr.x, dr.y);
   ctx.rotate(dr.angle);
   
   // Main body - rectangular satellite bus
@@ -747,9 +748,10 @@ function renderSatellite(dr, camX, camY, ctx) {
 }
 
 // Enhanced base station rendering
-function renderBase(baseObj, camX, camY, ctx) {
+// Called from WITHIN camera transformation context - uses world coords
+function renderBase(baseObj, ctx) {
   ctx.save();
-  ctx.translate(baseObj.x - camX, baseObj.y - camY);
+  ctx.translate(baseObj.x, baseObj.y);
   
   // Outer defensive ring
   ctx.strokeStyle = '#00ff88';
@@ -941,8 +943,8 @@ function render(dt) {
     ctx.stroke();
   }
   
-  // Base station with new graphics
-  renderBase(G.base, G.cam.x, G.cam.y, ctx);
+  // Base station with new graphics - FIXED: now in camera transform, uses world coords
+  renderBase(G.base, ctx);
   
   // Asteroids
   G.asteroids.forEach(a => {
@@ -1021,9 +1023,9 @@ function render(dt) {
     ctx.restore();
   });
   
-  // Enhanced drones/satellites with new graphics
+  // Enhanced drones/satellites with new graphics - FIXED: now in camera transform, uses world coords
   G.drones.forEach(dr => {
-    renderSatellite(dr, G.cam.x, G.cam.y, ctx);
+    renderSatellite(dr, ctx);
   });
   
   // Nets
@@ -1052,12 +1054,12 @@ function render(dt) {
     ctx.fillStyle = p.color;
     ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
     ctx.beginPath();
-    ctx.arc(p.x - G.cam.x, p.y - G.cam.y, p.r, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
     ctx.fill();
   });
   ctx.globalAlpha = 1;
   
-  // Laser beam
+  // Laser beam - FIXED: now uses world coords (no camera offset needed)
   if (laserBeam) {
     const alpha = laserBeam.timer / CFG.laser.beamTime;
     ctx.strokeStyle = `rgba(0, 200, 255, ${alpha * 0.8})`;
@@ -1082,7 +1084,7 @@ function render(dt) {
     const haz = CFG.hazard[h.type];
     ctx.fillStyle = `rgba(${haz.col.substring(1, 3)}, ${haz.col.substring(3, 5)}, ${haz.col.substring(5, 7)}, 0.15)`;
     ctx.beginPath();
-    ctx.arc(h.x - G.cam.x, h.y - G.cam.y, h.r, 0, Math.PI * 2);
+    ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.strokeStyle = `${haz.col}`;
@@ -1095,7 +1097,7 @@ function render(dt) {
   // Player spacecraft
   const p = G.player;
   ctx.save();
-  ctx.translate(p.x - G.cam.x, p.y - G.cam.y);
+  ctx.translate(p.x, p.y);
   ctx.rotate(p.angle);
   
   ctx.fillStyle = '#00c8ff';
