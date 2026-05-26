@@ -654,7 +654,7 @@ function renderSatellite(dr, ctx) {
   ctx.translate(dr.x, dr.y);
   ctx.rotate(dr.angle);
   
-  const scale = 2.2; // Scale factor for size increase
+  const scale = 3.5; // Increased scale factor for larger satellite
   
   // OUTER SHELL - Main body - rectangular satellite bus
   ctx.fillStyle = '#6a5aff';
@@ -862,7 +862,7 @@ function renderBase(baseObj, ctx) {
 
 function renderRadar() {
   const p = G.player;
-  const radarX = 50;
+  const radarX = canvas.width - 50;
   const radarY = canvas.height - 50;
   const radarSize = 100;
   const radarRange = CFG.radar.range;
