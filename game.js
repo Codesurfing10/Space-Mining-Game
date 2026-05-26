@@ -42,15 +42,15 @@ const ACHIEVEMENTS = [
 
 const WAVES = [
   { name: 'SECTOR ALPHA · ENTRY ZONE', briefing: 'Clear the approach corridor and establish a presence.', debris: [{t:'small',n:4},{t:'medium',n:1}], asteroids: [{t:'small',n:3}], mines: 0, drones: 0, oreTarget: 50 },
-  { name: 'SECTOR BETA · DEBRIS BELT', briefing: 'Dense debris field detected. Proximity mines litter the lane.', debris: [{t:'small',n:7},{t:'medium',n:3}], asteroids: [{t:'small',n:2},{t:'medium',n:2}], mines: 4, drones: 0, oreTarget: 100 },
-  { name: 'SECTOR GAMMA · ION STORM', briefing: 'Ion storm active — power bus vulnerability high. One hostile drone scouting.', debris: [{t:'small',n:8},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:'small',n:3},{t:'medium',n:2}], mines: 3, drones: 1, oreTarget: 150 },
-  { name: 'SECTOR DELTA · MINE FIELD', briefing: 'Scattered proximity mines blanket the sector. Advance with caution.', debris: [{t:'small',n:6},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:'small',n:2},{t:'medium',n:3}], mines: 8, drones: 0, oreTarget: 180 },
-  { name: 'SECTOR EPSILON · DRONE SWARM', briefing: 'Rogue mining drones have turned hostile. Neutralise the swarm.', debris: [{t:'small',n:10},{t:'medium',n:5},{t:'large',n:2}], asteroids: [{t:'small',n:4},{t:'medium',n:2}], mines: 2, drones: 3, oreTarget: 220 },
-  { name: 'SECTOR ZETA · RADIATION BELT', briefing: 'Heavy radiation — hull integrity will decay. Drones are closing in.', debris: [{t:'small',n:12},{t:'medium',n:6},{t:'large',n:2}], asteroids: [{t:'medium',n:3},{t:'large',n:1}], mines: 4, drones: 2, oreTarget: 280 },
-  { name: 'SECTOR ETA · SATELLITE GRAVEYARD', briefing: 'Dead satellites everywhere. Heavy drone patrols. Maximum caution.', debris: [{t:'small',n:14},{t:'medium',n:8},{t:'large',n:3}], asteroids: [{t:'medium',n:4},{t:'large',n:2}], mines: 6, drones: 4, oreTarget: 320 },
-  { name: 'SECTOR THETA · STORM FRONT', briefing: 'Multiple hazard zones converge. Mines and drones defend the perimeter.', debris: [{t:'small',n:16},{t:'medium',n:8},{t:'large',n:4}], asteroids: [{t:'medium',n:5},{t:'large',n:2}], mines: 10, drones: 3, oreTarget: 380 },
-  { name: 'SECTOR IOTA · SIEGE MODE', briefing: 'Full-scale assault. All systems critical. Hold the line.', debris: [{t:'small',n:18},{t:'medium',n:10},{t:'large',n:5}], asteroids: [{t:'medium',n:6},{t:'large',n:3}], mines: 12, drones: 5, oreTarget: 450 },
-  { name: 'SECTOR KAPPA · FINAL STAND', briefing: 'Last known debris concentration. Finish this.', debris: [{t:'small',n:20},{t:'medium',n:12},{t:'large',n:6}], asteroids: [{t:'medium',n:8},{t:'large',n:4}], mines: 15, drones: 6, oreTarget: 500 },
+  { name: 'SECTOR BETA · DEBRIS BELT', briefing: 'Dense debris field detected. Proximity mines litter the lane.', debris: [{t:'small',n:7},{t:'medium',n:3}], asteroids: [{t:'small',n:2},{t:'medium',n:1}], mines: 3, drones: 0, oreTarget: 100 },
+  { name: 'SECTOR GAMMA · ION STORM', briefing: 'Ion storm active — power bus vulnerability high. One hostile drone scouting.', debris: [{t:'small',n:8},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:'medium',n:2}], mines: 2, drones: 1, oreTarget: 150 },
+  { name: 'SECTOR DELTA · MINE FIELD', briefing: 'Scattered proximity mines blanket the sector. Advance with caution.', debris: [{t:'small',n:6},{t:'medium',n:4},{t:'large',n:1}], asteroids: [{t:'medium',n:1},{t:'large',n:1}], mines: 8, drones: 0, oreTarget: 200 },
+  { name: 'SECTOR EPSILON · DRONE SWARM', briefing: 'Rogue mining drones have turned hostile. Neutralise the swarm.', debris: [{t:'small',n:10},{t:'medium',n:5},{t:'large',n:2}], asteroids: [{t:'large',n:2}], mines: 2, drones: 5, oreTarget: 250 },
+  { name: 'SECTOR ZETA · RADIATION BELT', briefing: 'Heavy radiation — hull integrity will decay. Drones are closing in.', debris: [{t:'small',n:12},{t:'medium',n:6},{t:'large',n:2}], asteroids: [{t:'large',n:3}], mines: 4, drones: 3, oreTarget: 300 },
+  { name: 'SECTOR ETA · SATELLITE GRAVEYARD', briefing: 'Dead satellites everywhere. Heavy drone patrols. Maximum caution.', debris: [{t:'small',n:14},{t:'medium',n:8},{t:'large',n:3}], asteroids: [{t:'large',n:2}], mines: 6, drones: 4, oreTarget: 400 },
+  { name: 'SECTOR THETA · STORM FRONT', briefing: 'Multiple hazard zones converge. Mines and drones defend the perimeter.', debris: [{t:'small',n:16},{t:'medium',n:8},{t:'large',n:4}], asteroids: [{t:'large',n:4}], mines: 10, drones: 6, oreTarget: 500 },
+  { name: 'SECTOR IOTA · SIEGE MODE', briefing: 'Full-scale assault. All systems critical. Hold the line.', debris: [{t:'small',n:18},{t:'medium',n:10},{t:'large',n:5}], asteroids: [{t:'large',n:5}], mines: 12, drones: 8, oreTarget: 600 },
+  { name: 'SECTOR KAPPA · FINAL STAND', briefing: 'Last known debris concentration. Finish this.', debris: [{t:'small',n:20},{t:'medium',n:12},{t:'large',n:6}], asteroids: [{t:'large',n:6}], mines: 15, drones: 10, oreTarget: 750 },
 ];
 
 let G = null;
@@ -60,7 +60,7 @@ function mkPlayer() {
 }
 
 function initGame() {
-  G = { state: 'PLAYING', score: 0, wave: 1, debrisCleared: 0, netCaptures: 0, hazardTime: 0, tokens: 0, time: 0, player: mkPlayer(), debris: [], asteroids: [], particles: [], nets: [], ore: [], mines: [], drones: [], hazards: [], base: { x: CFG.world.w / 2, y: CFG.world.h / 2, r: 50, id: 'BASE' }, log: [], stars: genStars(), cam: { x: CFG.world.w / 2, y: CFG.world.h / 2 }, shakeTimer: 0, shakeAmt: 0, waveActive: true, waveGoals: { debrisTarget: 0, dronesTarget: 0, oreTarget: 0, oreAtWaveStart: 0 }, unlockedAchievements: new Set() };
+  G = { state: 'PLAYING', score: 0, wave: 1, debrisCleared: 0, netCaptures: 0, hazardTime: 0, tokens: 0, time: 0, player: mkPlayer(), debris: [], asteroids: [], particles: [], nets: [], ore: [], mines: [], drones: [], hazards: [], base: { x: CFG.world.w / 2, y: CFG.world.h / 2, id: 'BASE' }, cam: { x: 0, y: 0 }, shakeTimer: 0, shakeAmt: 0, log: [], unlockedAchievements: new Set(), waveActive: false, waveGoals: { debrisTarget: 0, dronesTarget: 0, oreTarget: 0, oreAtWaveStart: 0 }, levelName: '', waveTokensEarned: 0, stars: genStars() };
   spawnWave(1);
 }
 
@@ -181,7 +181,7 @@ function spawnDrones(count) {
   for (let i = 0; i < count; i++) {
     const pos = randomEdgePos(400);
     const patrolAngle = Math.random() * Math.PI * 2;
-    G.drones.push({ x: pos.x, y: pos.y, vx: Math.cos(patrolAngle) * dc.speed * 0.3, vy: Math.sin(patrolAngle) * dc.speed * 0.3, r: dc.r, hp: dc.hp, maxHp: dc.hp, angle: patrolAngle, state: 'patrol', patrolAngle: patrolAngle, patrolTimer: 2 + Math.random() * 3, id: 'DRONE_' + (Math.random() * 1e9 | 0) });
+    G.drones.push({ x: pos.x, y: pos.y, vx: Math.cos(patrolAngle) * dc.speed * 0.3, vy: Math.sin(patrolAngle) * dc.speed * 0.3, r: dc.r, hp: dc.hp, maxHp: dc.hp, angle: patrolAngle, state: 'patrol', patrolTimer: 2 + Math.random() * 3, patrolAngle: patrolAngle, id: 'DRONE_' + (Math.random() * 1e9 | 0) });
   }
   if (count > 0) addLog(count + ' hostile drone(s) detected in sector', 'crit');
 }
@@ -208,7 +208,7 @@ function checkAndUnlockAchievements() {
 function showAchievementToast(achievement) {
   const toast = document.createElement('div');
   toast.className = 'achievement-toast';
-  toast.innerHTML = `<div class="achievement-title">✦ ${achievement.label}</div><div>${achievement.desc}</div><div class="achievement-reward"><span class="crypto-badge">+${achievement.tokens} TOKENS◆</span></div>`;
+  toast.innerHTML = `<div class="achievement-title">✦ ${achievement.label}</div><div>${achievement.desc}</div><div class="achievement-reward"><span class="crypto-badge">+${achievement.tokens} T◆</span></div>`;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 4000);
 }
@@ -265,13 +265,13 @@ function spawnThrustParticle(p) {
   const spread = 0.35;
   const a = back + (Math.random() - 0.5) * spread;
   const s = 80 + Math.random() * 120;
-  G.particles.push({ x: p.x + Math.cos(back) * 22, y: p.y + Math.sin(back) * 22, vx: Math.cos(a) * s + p.vx * 0.4, vy: Math.sin(a) * s + p.vy * 0.4, life: 0.25 + Math.random() * 0.2, maxLife: 0.4, color: '#ffaa55', r: 1.5 + Math.random() * 1 });
+  G.particles.push({ x: p.x + Math.cos(back) * 22, y: p.y + Math.sin(back) * 22, vx: Math.cos(a) * s + p.vx * 0.4, vy: Math.sin(a) * s + p.vy * 0.4, life: 0.25 + Math.random() * 0.2, maxLife: 0.4, color: '#ff8040', r: 1.5 + Math.random() * 2 });
 }
 
 function spawnMineParticle(x, y) {
   const a = Math.random() * Math.PI * 2;
   const s = 30 + Math.random() * 60;
-  G.particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: 0.4+Math.random()*0.4, maxLife:0.8, color: ['#ffc846','#ff8040','#ffaa00'][Math.floor(Math.random()*3)], r: 1 + Math.random() * 1.5 });
+  G.particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: 0.4+Math.random()*0.4, maxLife:0.8, color: ['#ffc846','#ff8040','#ffaa00'][Math.floor(Math.random()*3)], r: 1 + Math.random() * 2 });
 }
 
 function spawnExplosion(x, y, size) {
@@ -654,7 +654,7 @@ function renderSatellite(dr, ctx) {
   ctx.translate(dr.x, dr.y);
   ctx.rotate(dr.angle);
   
-  const scale = 3.5; // Increased scale factor for larger satellite
+  const scale = 4.5; // Increased scale factor for larger satellite
   
   // OUTER SHELL - Main body - rectangular satellite bus
   ctx.fillStyle = '#6a5aff';
@@ -862,9 +862,9 @@ function renderBase(baseObj, ctx) {
 
 function renderRadar() {
   const p = G.player;
-  const radarX = canvas.width - 50;
-  const radarY = canvas.height - 50;
-  const radarSize = 100;
+  const radarX = canvas.width - 150;
+  const radarY = canvas.height - 150;
+  const radarSize = 130;
   const radarRange = CFG.radar.range;
   
   ctx.save();
@@ -894,13 +894,13 @@ function renderRadar() {
   
   // Cardinal directions
   ctx.fillStyle = 'rgba(0, 200, 255, 0.4)';
-  ctx.font = '9px "Courier New"';
+  ctx.font = '10px "Courier New"';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('N', 0, -radarSize - 8);
-  ctx.fillText('S', 0, radarSize + 8);
-  ctx.fillText('E', radarSize + 8, 0);
-  ctx.fillText('W', -radarSize - 8, 0);
+  ctx.fillText('N', 0, -radarSize - 10);
+  ctx.fillText('S', 0, radarSize + 10);
+  ctx.fillText('E', radarSize + 10, 0);
+  ctx.fillText('W', -radarSize - 10, 0);
   
   // Plot entities
   const plotEntity = (obj, color) => {
@@ -914,7 +914,7 @@ function renderRadar() {
     
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(rx, ry, 2, 0, Math.PI * 2);
+    ctx.arc(rx, ry, 2.5, 0, Math.PI * 2);
     ctx.fill();
   };
   
@@ -927,7 +927,7 @@ function renderRadar() {
   // Player at center
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.arc(0, 0, 3, 0, Math.PI * 2);
+  ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
   ctx.fill();
   
   ctx.restore();
@@ -1127,25 +1127,126 @@ function render(dt) {
     ctx.globalAlpha = 1;
   });
   
-  // Player spacecraft
+  // Player spacecraft - ENHANCED GRAPHICS
   const p = G.player;
   ctx.save();
   ctx.translate(p.x, p.y);
   ctx.rotate(p.angle);
   
-  ctx.fillStyle = '#00c8ff';
+  // Main hull - larger and more angular
+  ctx.fillStyle = '#00d4ff';
   ctx.beginPath();
-  ctx.moveTo(12, 0);
-  ctx.lineTo(-8, -8);
-  ctx.lineTo(-4, 0);
-  ctx.lineTo(-8, 8);
+  ctx.moveTo(18, 0);      // Front point (nose)
+  ctx.lineTo(8, -12);     // Upper left wing
+  ctx.lineTo(0, -8);      // Inner upper
+  ctx.lineTo(-6, -10);    // Left thruster wing
+  ctx.lineTo(-10, 0);     // Left side
+  ctx.lineTo(-6, 10);     // Left bottom
+  ctx.lineTo(0, 8);       // Inner lower
+  ctx.lineTo(8, 12);      // Lower right wing
   ctx.closePath();
   ctx.fill();
   
+  // Hull outline
+  ctx.strokeStyle = '#00f0ff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  
+  // Cockpit/viewport window - glowing
+  ctx.fillStyle = '#00ffff';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.arc(10, 0, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  
+  // Inner viewport detail
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.arc(6, 0, 3, 0, Math.PI * 2);
+  ctx.arc(10, 0, 2, 0, Math.PI * 2);
   ctx.fill();
+  
+  // Left and right weapon ports - glowing cyan
+  ctx.fillStyle = '#00ffff';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 6;
+  ctx.fillRect(6, -8, 3, 3);
+  ctx.fillRect(6, 5, 3, 3);
+  ctx.shadowColor = 'transparent';
+  
+  // Shield indicators (small triangles at sides)
+  ctx.fillStyle = '#00d4ff';
+  ctx.beginPath();
+  ctx.moveTo(4, -10);
+  ctx.lineTo(2, -8);
+  ctx.lineTo(4, -6);
+  ctx.closePath();
+  ctx.fill();
+  
+  ctx.beginPath();
+  ctx.moveTo(4, 10);
+  ctx.lineTo(2, 8);
+  ctx.lineTo(4, 6);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Heat vents (thin vertical lines)
+  ctx.strokeStyle = '#ff6b35';
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.7;
+  for (let i = 0; i < 4; i++) {
+    const offset = -9 + i * 5;
+    ctx.beginPath();
+    ctx.moveTo(0, offset);
+    ctx.lineTo(2, offset);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  
+  // Engine glow effect
+  ctx.fillStyle = 'rgba(255, 107, 53, 0.4)';
+  ctx.beginPath();
+  ctx.ellipse(-8, 0, 5, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Main thruster flame - orange/red
+  ctx.fillStyle = '#ff6b35';
+  ctx.shadowColor = '#ff6b35';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.moveTo(-10, -3);
+  ctx.lineTo(-10, 3);
+  ctx.lineTo(-16 - Math.random() * 3, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  
+  // Bright inner flame
+  ctx.fillStyle = '#ffaa00';
+  ctx.beginPath();
+  ctx.moveTo(-10, -1.5);
+  ctx.lineTo(-10, 1.5);
+  ctx.lineTo(-12 - Math.random() * 2, 0);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Side thruster effects
+  ctx.fillStyle = 'rgba(255, 107, 53, 0.6)';
+  ctx.beginPath();
+  ctx.arc(-6, -10, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(-6, 10, 2, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Hull damage indicator glow (subtle)
+  ctx.strokeStyle = `rgba(255, ${Math.max(0, 255 - (100 - p.hull) * 2.55)}, 0, 0.5)`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(15, -8);
+  ctx.lineTo(12, -10);
+  ctx.stroke();
   
   ctx.restore();
   
