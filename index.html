@@ -150,8 +150,14 @@ body::before {
   <button class="start-btn" id="restartBtn" style="margin-top:8px">↺ RESTART MISSION</button>
 </div>
 
-<canvas id="gameCanvas"></canvas>
+<!-- THREE.JS CONTAINER (3D scene sits behind 2D canvas) -->
+<div id="threeContainer" style="position:absolute; inset:0; z-index:0; pointer-events:none;"></div>
 
+<canvas id="gameCanvas" style="position:absolute; inset:0; z-index:1;"></canvas>
+
+<!-- Include Three.js and the 3D renderer, then the main game script -->
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+<script src="three-renderer.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
