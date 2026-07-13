@@ -155,9 +155,8 @@ body::before {
 
 <canvas id="gameCanvas" style="position:absolute; inset:0; z-index:1;"></canvas>
 
-<!-- Include Three.js and the 3D renderer, then the main game script -->
-<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-<script src="three-renderer.js"></script>
+<!-- Load the three-renderer as a module so we can use postprocessing -> EffectComposer, UnrealBloom -->
+<script type="module" src="three-renderer.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
