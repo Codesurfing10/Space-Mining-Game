@@ -155,8 +155,14 @@ body::before {
 
 <canvas id="gameCanvas" style="position:absolute; inset:0; z-index:1;"></canvas>
 
-<!-- Load the three-renderer as a module so we can use postprocessing -> EffectComposer, UnrealBloom -->
-<script type="module" src="three-renderer.js"></script>
+<!-- Load three-renderer dynamically; if it fails the 2D game will still run -->
+<script type="module">
+import('./three-renderer.js').then(() => {
+  console.log('three-renderer loaded');
+}).catch(err => {
+  console.warn('three-renderer failed to load — continuing with 2D only', err);
+});
+</script>
 <script src="game.js"></script>
 </body>
 </html>
