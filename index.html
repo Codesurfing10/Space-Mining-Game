@@ -157,11 +157,15 @@ body::before {
 
 <!-- Load three-renderer dynamically; if it fails the 2D game will still run -->
 <script type="module">
-import('./three-renderer.js').then(() => {
-  console.log('three-renderer loaded');
-}).catch(err => {
-  console.warn('three-renderer failed to load — continuing with 2D only', err);
-});
+import('./three-renderer.js')
+  .then(mod => {
+    // Attach the exported renderer function to window so non-module code can call it
+    window.renderThree = mod.renderThree || mod.default || null;
+    console.log('three-renderer loaded');
+  })
+  .catch(err => {
+    console.warn('three-renderer failed to load — continuing with 2D only', err);
+  });
 </script>
 <script src="game.js"></script>
 </body>
