@@ -1,133 +1,177 @@
 <!DOCTYPE html>
-<html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity Web Player | ARIA -UNITY</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
-  </head>
-  <body>
-    <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
-        </div>
-      </div>
-      <div id="unity-warning"> </div>
-      <div id="unity-footer">
-        <div id="unity-logo-title-footer"></div>
-        <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">ARIA -UNITY</div>
-      </div>
-    </div>
-    <script>
-      var canvas = document.querySelector("#unity-canvas");
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A·R·I·A — Space Mining & Debris Cleanup</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:     #020d18;
+  --cyan:   #00c8ff;
+  --green:  #00e5a0;
+  --gold:   #ffc846;
+  --red:    #ff4060;
+  --purple: #b06aff;
+  --txt:    rgba(180,230,255,.9);
+  --txt2:   rgba(120,190,220,.6);
+  --line:   rgba(0,200,255,.18);
+  --fnt:    'Courier New', monospace;
+}
+html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); font-family:var(--fnt); }
+canvas { display:block; }
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:9999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);
+}
+.corner { position:fixed; width:22px; height:22px; z-index:100; border-color:var(--cyan); border-style:solid; }
+.corner.tl { top:6px; left:6px;   border-width:2px 0 0 2px; }
+.corner.tr { top:6px; right:6px;  border-width:2px 2px 0 0; }
+.corner.bl { bottom:6px; left:6px;  border-width:0 0 2px 2px; }
+.corner.br { bottom:6px; right:6px; border-width:0 2px 2px 0; }
 
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
-      function unityShowBanner(msg, type) {
-        var warningBanner = document.querySelector("#unity-warning");
-        function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-        }
-        var div = document.createElement('div');
-        div.innerHTML = msg;
-        warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
-            updateBannerVisibility();
-          }, 5000);
-        }
-        updateBannerVisibility();
-      }
+/* ── OVERLAY SCREENS ── */
+.screen {
+  position:fixed; inset:0; z-index:200;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; background:rgba(2,13,24,.92);
+  font-family:var(--fnt);
+}
+.screen.hidden { display:none; }
+.screen h1 {
+  font-size:clamp(28px,4vw,52px); color:var(--cyan); letter-spacing:.3em;
+  text-shadow:0 0 24px var(--cyan), 0 0 60px rgba(0,200,255,.3);
+}
+.screen .sub { font-size:clamp(9px,1.2vw,13px); color:var(--txt2); letter-spacing:.18em; margin-top:-10px; }
+.screen .tagline { font-size:clamp(10px,1.4vw,14px); color:var(--txt); letter-spacing:.1em; text-align:center; max-width:520px; line-height:1.8; }
+.screen .controls-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:6px 28px; margin-top:6px;
+  font-size:clamp(9px,1.1vw,11px);
+}
+.ctrl-row { display:flex; gap:10px; align-items:baseline; }
+.ctrl-key { color:var(--cyan); min-width:90px; text-align:right; font-weight:bold; }
+.ctrl-act { color:var(--txt2); }
+.start-btn {
+  margin-top:8px; padding:10px 36px;
+  background:transparent; border:1px solid var(--cyan); color:var(--cyan);
+  font-family:var(--fnt); font-size:clamp(11px,1.4vw,14px); letter-spacing:.2em; cursor:pointer;
+  transition:all .2s;
+}
+.start-btn:hover { background:rgba(0,200,255,.12); box-shadow:0 0 18px rgba(0,200,255,.3); }
+.score-big { font-size:clamp(22px,3vw,42px); color:var(--gold); letter-spacing:.1em; }
+.score-label { font-size:clamp(10px,1.2vw,13px); color:var(--txt2); letter-spacing:.15em; }
+.stat-row { display:flex; gap:40px; justify-content:center; }
+.stat-block { text-align:center; }
+.stat-val { font-size:clamp(16px,2vw,26px); color:var(--cyan); }
+.stat-lbl { font-size:10px; color:var(--txt2); letter-spacing:.12em; }
 
-      var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/buildunity.loader.js";
-      var config = {
-        arguments: [],
-        dataUrl: buildUrl + "/buildunity.data.gz",
-        frameworkUrl: buildUrl + "/buildunity.framework.js.gz",
-        codeUrl: buildUrl + "/buildunity.wasm.gz",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "DefaultCompany",
-        productName: "ARIA -UNITY",
-        productVersion: "0.1.0",
-        showBanner: unityShowBanner,
-        // errorHandler: function(err, url, line) {
-        //    alert("error " + err + " occurred at line " + line);
-        //    // Return 'true' if you handled this error and don't want Unity
-        //    // to process it further, 'false' otherwise.
-        //    return true;
-        // },
-      };
+/* ── ACHIEVEMENT TOAST ── */
+.achievement-toast {
+  position:fixed; bottom:20px; right:20px; z-index:999;
+  padding:12px 20px; background:rgba(0,200,255,.15);
+  border:1px solid var(--cyan); border-radius:4px;
+  font-size:12px; color:var(--green);
+  animation:slideIn 0.3s ease-out;
+  max-width:300px;
+  box-shadow:0 0 20px rgba(0,200,255,.4);
+}
+@keyframes slideIn { from { transform:translateX(400px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+.achievement-title { font-weight:bold; color:var(--gold); letter-spacing:.05em; margin-bottom:4px; }
+.achievement-reward { color:var(--green); font-size:11px; margin-top:4px; }
+.crypto-badge { color:#00ff88; font-weight:bold; }
+</style>
+</head>
+<body>
 
-      // By default, Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = false;
+<!-- Corner brackets -->
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
 
-      // If you would like all file writes inside Unity Application.persistentDataPath
-      // directory to automatically persist so that the contents are remembered when
-      // the user revisits the site the next time, uncomment the following line:
-      // config.autoSyncPersistentDataPath = true;
-      // This autosyncing is currently not the default behavior to avoid regressing
-      // existing user projects that might rely on the earlier manual
-      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
-      // expected to change.
+<!-- TITLE SCREEN -->
+<div class="screen" id="titleScreen">
+  <div style="font-size:clamp(9px,1vw,11px);color:var(--txt2);letter-spacing:.25em">AUTONOMOUS REMEDIATION &amp; INTERCEPTION ARCHITECTURE</div>
+  <h1>A·R·I·A</h1>
+  <div class="sub">SPACE MINING &amp; DEBRIS CLEANUP · v4.3.1 (Enhanced Graphics)</div>
+  <div class="tagline">
+    Low-Earth orbit is a war zone of dead satellites and rocket bodies.<br>
+    You are the A·R·I·A spacecraft — the last line of defense.<br>
+    Mine asteroids. Capture debris. Avoid mines. Destroy drones. Earn crypto rewards!
+  </div>
+  <div class="controls-grid">
+    <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span class="ctrl-act">Thrust spacecraft</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">LEFT CLICK</span><span class="ctrl-act">Fire laser (debris / mines / drones)</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">SHIFT</span><span class="ctrl-act">Emergency brake</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">RIGHT CLICK</span><span class="ctrl-act">Deploy capture net (debris / drones)</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">E</span><span class="ctrl-act">Mining arm (near asteroid)</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">R</span><span class="ctrl-act">Dock at base station</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">ESC</span><span class="ctrl-act">Pause game</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">MOUSE</span><span class="ctrl-act">Aim turret / arms</span></div>
+  </div>
+  <button class="start-btn" id="startBtn">▶ LAUNCH MISSION</button>
+  <div style="font-size:10px;color:var(--txt2);letter-spacing:.1em;margin-top:4px">10 levels · Proximity mines · Hostile drones · Hazard zones · Crypto achievements</div>
+</div>
 
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
+<!-- PAUSE SCREEN -->
+<div class="screen hidden" id="pauseScreen">
+  <h1 style="font-size:clamp(20px,3vw,36px)">MISSION PAUSED</h1>
+  <div class="tagline" style="color:var(--txt2)">Press ESC or click to resume</div>
+  <button class="start-btn" id="resumeBtn">▶ RESUME</button>
+  <button class="start-btn" style="border-color:var(--gold);color:var(--gold);margin-top:4px" id="restartFromPauseBtn">↺ RESTART</button>
+</div>
 
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-        document.querySelector("#unity-container").className = "unity-mobile";
-        canvas.className = "unity-mobile";
+<!-- WAVE CLEAR SCREEN -->
+<div class="screen hidden" id="waveClearScreen">
+  <div style="font-size:clamp(10px,1.2vw,13px);color:var(--green);letter-spacing:.2em">LEVEL CLEARED</div>
+  <h1 id="waveClearTitle" style="font-size:clamp(22px,3.5vw,44px)">LEVEL 1 COMPLETE</h1>
+  <div id="waveClearSubtitle" style="font-size:clamp(9px,1.1vw,12px);color:var(--cyan);letter-spacing:.15em;margin-top:-10px"></div>
+  <div class="stat-row">
+    <div class="stat-block"><div class="stat-val" id="waveBonus">+500</div><div class="stat-lbl">WAVE BONUS</div></div>
+    <div class="stat-block"><div class="stat-val" id="totalScoreWave">1,250</div><div class="stat-lbl">TOTAL SCORE</div></div>
+    <div class="stat-block"><div class="stat-val" id="waveTokens" style="color:var(--green);">+0</div><div class="stat-lbl">TOKENS ◆</div></div>
+  </div>
+  <div class="tagline" id="nextWaveMsg" style="color:var(--txt2)">Preparing Wave 2 deployment...</div>
+  <button class="start-btn" id="nextWaveBtn">▶ NEXT WAVE</button>
+</div>
 
-        // To lower canvas resolution on mobile devices to gain some
-        // performance, uncomment the following line:
-        // config.devicePixelRatio = 1;
+<!-- GAME OVER SCREEN -->
+<div class="screen hidden" id="gameOverScreen">
+  <div style="font-size:clamp(10px,1.2vw,13px);color:var(--red);letter-spacing:.2em">⚠ MISSION FAILED — HULL BREACH</div>
+  <h1 style="color:var(--red);font-size:clamp(22px,3.5vw,44px)">A·R·I·A DESTROYED</h1>
+  <div class="score-label">FINAL SCORE</div>
+  <div class="score-big" id="finalScore">0</div>
+  <div class="stat-row" style="margin-top:8px">
+    <div class="stat-block"><div class="stat-val" id="finalWave">1</div><div class="stat-lbl">WAVES CLEARED</div></div>
+    <div class="stat-block"><div class="stat-val" id="finalDebris">0</div><div class="stat-lbl">DEBRIS CLEARED</div></div>
+    <div class="stat-block"><div class="stat-val" id="finalOre">0 kg</div><div class="stat-lbl">ORE MINED</div></div>
+    <div class="stat-block"><div class="stat-val" id="finalTokens" style="color:var(--green);">0</div><div class="stat-lbl">TOKENS ◆</div></div>
+  </div>
+  <button class="start-btn" id="restartBtn" style="margin-top:8px">↺ RESTART MISSION</button>
+</div>
 
+<!-- THREE.JS CONTAINER (3D scene sits behind 2D canvas) -->
+<div id="threeContainer" style="position:absolute; inset:0; z-index:0; pointer-events:none;"></div>
 
-      } else {
-        // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
-        canvas.style.width = "960px";
-        canvas.style.height = "600px";
-      }
+<canvas id="gameCanvas" style="position:absolute; inset:0; z-index:1;"></canvas>
 
-      document.querySelector("#unity-loading-bar").style.display = "block";
-
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
-              }).then((unityInstance) => {
-                document.querySelector("#unity-loading-bar").style.display = "none";
-                document.querySelector("#unity-fullscreen-button").onclick = () => {
-                  unityInstance.SetFullscreen(1);
-                };
-
-              }).catch((message) => {
-                alert(message);
-              });
-            };
-
-      document.body.appendChild(script);
-
-    </script>
-  </body>
+<!-- Load three-renderer dynamically; if it fails the 2D game will still run -->
+<script type="module">
+import('./three-renderer.js').then(() => {
+  console.log('three-renderer loaded');
+}).catch(err => {
+  console.warn('three-renderer failed to load — continuing with 2D only', err);
+});
+import('./three-renderer.js')
+  .then(mod => {
+    // Attach the exported renderer function to window so non-module code can call it
+    window.renderThree = mod.renderThree || mod.default || null;
+    console.log('three-renderer loaded');
+  })
+  .catch(err => {
+    console.warn('three-renderer failed to load — continuing with 2D only', err);
+  });
+</script>
+<script src="game.js"></script>
+</body>
 </html>
