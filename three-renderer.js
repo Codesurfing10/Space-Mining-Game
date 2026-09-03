@@ -343,10 +343,21 @@
         }
         hideExtra(state.mineMeshes, mc);
 
-        // Base
+        // Base — pulse / color when docking
         if (state.baseMesh && G.base) {
           state.baseMesh.position.set(G.base.x - state.worldCX, G.base.y - state.worldCY, -4);
           state.baseMesh.rotation.z = (G.t || 0) * 0.15;
+          if (state.baseMesh.material) {
+            if (G.docking) {
+              state.baseMesh.material.color.setHex(0xffc846);
+              state.baseMesh.material.opacity = 0.35 + (G.dockProgress || 0) * 0.45;
+              state.baseMesh.scale.setScalar(1 + (G.dockProgress || 0) * 0.12);
+            } else {
+              state.baseMesh.material.color.setHex(0x00e5a0);
+              state.baseMesh.material.opacity = 0.35;
+              state.baseMesh.scale.setScalar(1);
+            }
+          }
         }
 
         // Particles

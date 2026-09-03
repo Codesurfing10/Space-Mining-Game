@@ -1,6 +1,6 @@
 /**
  * A·R·I·A — Space Mining & Debris Cleanup
- * Improved 3D gameplay core
+ * feat/ship-base-upgrades-radar — ship systems, upgrades, cargo, shield, fuel, radar
  */
 
 (() => {
@@ -21,8 +21,29 @@
       laserDamage: 28,
       netCooldown: 1.4,
       netRange: 160,
+      netRadius: 55,
       mineRange: 90,
-      mineRate: 18 // ore per second
+      mineRate: 18,          // base ore kg/s
+      // New systems
+      maxFuel: 100,
+      fuelBurnThrust: 9,     // fuel / second while thrusting
+      fuelBurnMine: 4,       // fuel / second while mining
+      maxShield: 50,
+      shieldRegen: 4.5,      // /s when not recently hit
+      shieldRegenDelay: 2.2,
+      cargoCap: 50,          // kg
+      oreSellScore: 4,       // score per kg at dock
+      oreSellTokenDiv: 8     // tokens = floor(ore / this)
+    },
+    // Upgrade definitions (level 0 = base, costs are for next level)
+    upgrades: {
+      miningSpeed:  { name: 'Mining Arm',   max: 5, costBase: 12, costScale: 1.55, perLevel: 0.22 }, // +22% rate
+      laserDamage:  { name: 'Laser Power',  max: 5, costBase: 15, costScale: 1.6,  perLevel: 0.18 },
+      netRadius:    { name: 'Net Radius',   max: 4, costBase: 10, costScale: 1.5,  perLevel: 0.25 },
+      enginePower:  { name: 'Engine',       max: 5, costBase: 14, costScale: 1.55, perLevel: 0.12 }, // +12% accel/speed
+      cargoCap:     { name: 'Cargo Hold',   max: 6, costBase: 10, costScale: 1.45, perLevel: 18 },  // +18 kg
+      shieldMax:    { name: 'Shield Gen',   max: 4, costBase: 16, costScale: 1.6,  perLevel: 12 },  // +12 max
+      fuelTank:     { name: 'Fuel Tank',    max: 4, costBase: 12, costScale: 1.5,  perLevel: 20 }   // +20 max
     },
     waves: [
       { debris: 12, asteroids: 8, mines: 2, drones: 1, bonus: 400 },
@@ -46,9 +67,14 @@
     wave: 0,
     score: 0,
     tokens: 0,
-    ore: 0,
+    ore: 0,                 // current cargo kg
     debrisCleared: 0,
     hull: CFG.player.maxHull,
+    fuel: CFG.player.maxFuel,
+    shield: CFG.player.maxShield,
+    shieldHitT: 0,          // time since last shield hit
+    docking: false,
+    dockProgress: 0,
     player: {
       x: CFG.world.w / 2,
       y: CFG.world.h / 2,
@@ -57,6 +83,16 @@
       angle: 0,
       pitch: 0,
       roll: 0
+    },
+    // Upgrade levels (0 = stock)
+    upgrades: {
+      miningSpeed: 0,
+      laserDamage: 0,
+      netRadius: 0,
+      enginePower: 0,
+      cargoCap: 0,
+      shieldMax: 0,
+      fuelTank: 0
     },
     keys: {},
     mouse: { x: 0, y: 0, worldX: 0, worldY: 0, left: false, right: false },
@@ -73,9 +109,48 @@
     base: { x: CFG.world.w / 2, y: CFG.world.h / 2, r: 70 },
     camera: { x: 0, y: 0, z: 500, shake: 0 },
     achievements: new Set(),
+    combo: { count: 0, timer: 0 },
+    sessionStats: { oreSold: 0, damageBlocked: 0, upgradesBought: 0 },
     t: 0
   };
   window.G = G;
+
+  // ─── DERIVED STATS ────────────────────────────────────────────────────────
+  function getStat(key) {
+    const u = G.upgrades[key] || 0;
+    const def = CFG.upgrades[key];
+    if (!def) return 0;
+    if (key === 'cargoCap') return CFG.player.cargoCap + u * def.perLevel;
+    if (key === 'shieldMax') return CFG.player.maxShield + u * def.perLevel;
+    if (key === 'fuelTank') return CFG.player.maxFuel + u * def.perLevel;
+    return 1 + u * def.perLevel;
+  }
+
+  function effectiveMineRate() {
+    return CFG.player.mineRate * getStat('miningSpeed');
+  }
+  function effectiveLaserDamage() {
+    return CFG.player.laserDamage * getStat('laserDamage');
+  }
+  function effectiveNetRadius() {
+    return CFG.player.netRadius * getStat('netRadius');
+  }
+  function effectiveAccel() {
+    return CFG.player.accel * getStat('enginePower');
+  }
+  function effectiveMaxSpeed() {
+    return CFG.player.maxSpeed * (1 + (G.upgrades.enginePower || 0) * 0.08);
+  }
+  function maxCargo() { return getStat('cargoCap'); }
+  function maxShield() { return getStat('shieldMax'); }
+  function maxFuel() { return getStat('fuelTank'); }
+
+  function upgradeCost(key) {
+    const def = CFG.upgrades[key];
+    const lvl = G.upgrades[key] || 0;
+    if (lvl >= def.max) return null;
+    return Math.floor(def.costBase * Math.pow(def.costScale, lvl));
+  }
 
   // ─── DOM ──────────────────────────────────────────────────────────────────
   const canvas = document.getElementById('gameCanvas');
@@ -84,6 +159,7 @@
   const pauseScreen = document.getElementById('pauseScreen');
   const waveClearScreen = document.getElementById('waveClearScreen');
   const gameOverScreen = document.getElementById('gameOverScreen');
+  const shopScreen = document.getElementById('shopScreen');
 
   function resize() {
     canvas.width = window.innerWidth;
@@ -95,9 +171,16 @@
   // ─── INPUT ────────────────────────────────────────────────────────────────
   window.addEventListener('keydown', e => {
     G.keys[e.code] = true;
-    if (e.code === 'Escape' && G.running) togglePause();
+    if (e.code === 'Escape' && G.running) {
+      if (shopScreen && !shopScreen.classList.contains('hidden')) {
+        closeShop();
+      } else {
+        togglePause();
+      }
+    }
     if (e.code === 'KeyR' && G.running && !G.paused) tryDock();
     if (e.code === 'KeyE' && G.running && !G.paused) tryMine(true);
+    if (e.code === 'KeyU' && G.running && !G.paused) openShop();
   });
   window.addEventListener('keyup', e => { G.keys[e.code] = false; });
 
@@ -116,10 +199,19 @@
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 
   document.getElementById('startBtn')?.addEventListener('click', startGame);
-  document.getElementById('resumeBtn')?.addEventListener('click', () => { G.paused = false; pauseScreen.classList.add('hidden'); });
+  document.getElementById('resumeBtn')?.addEventListener('click', () => {
+    G.paused = false;
+    pauseScreen.classList.add('hidden');
+  });
   document.getElementById('restartFromPauseBtn')?.addEventListener('click', startGame);
   document.getElementById('restartBtn')?.addEventListener('click', startGame);
   document.getElementById('nextWaveBtn')?.addEventListener('click', nextWave);
+  document.getElementById('shopBtn')?.addEventListener('click', openShop);
+  document.getElementById('closeShopBtn')?.addEventListener('click', closeShop);
+  document.getElementById('shopFromPauseBtn')?.addEventListener('click', () => {
+    pauseScreen?.classList.add('hidden');
+    openShop();
+  });
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -150,11 +242,33 @@
   }
 
   function addScore(n, reason) {
+    // Combo window
+    if (G.combo.timer > 0) {
+      G.combo.count++;
+      const mult = 1 + Math.min(0.5, G.combo.count * 0.05);
+      n = Math.floor(n * mult);
+    } else {
+      G.combo.count = 1;
+    }
+    G.combo.timer = 2.5;
     G.score += n;
     if (reason) floatText(G.player.x, G.player.y - 30, `+${n} ${reason}`, '#ffc846');
   }
 
   function damagePlayer(amt) {
+    // Shield absorbs first
+    if (G.shield > 0) {
+      const absorbed = Math.min(G.shield, amt);
+      G.shield -= absorbed;
+      G.sessionStats.damageBlocked += absorbed;
+      amt -= absorbed;
+      G.shieldHitT = 0;
+      if (absorbed > 0) {
+        burst(G.player.x, G.player.y, '#44aaff', 5);
+        floatText(G.player.x, G.player.y - 20, `SHIELD -${Math.floor(absorbed)}`, '#44aaff');
+      }
+    }
+    if (amt <= 0) return;
     G.hull -= amt;
     G.camera.shake = Math.min(12, G.camera.shake + amt * 0.15);
     burst(G.player.x, G.player.y, '#ff4060', 8);
@@ -168,9 +282,16 @@
     const key = title;
     if (G.achievements.has(key)) return;
     G.achievements.add(key);
+    // Token rewards for some achievements
+    let tokenGain = 0;
+    if (title.includes('SALE') || title.includes('ASTEROID')) tokenGain = 2;
+    if (title.includes('DRONE') || title.includes('WAVE')) tokenGain = 3;
+    if (title.includes('FULL CARGO') || title.includes('SHIELD MASTER')) tokenGain = 5;
+    if (tokenGain > 0) G.tokens += tokenGain;
     const el = document.createElement('div');
     el.className = 'achievement-toast';
-    el.innerHTML = `<div class="achievement-title">★ ${title}</div><div class="achievement-reward">${reward}</div>`;
+    el.innerHTML = `<div class="achievement-title">★ ${title}</div>
+      <div class="achievement-reward">${reward}${tokenGain ? ` · +${tokenGain} ◆` : ''}</div>`;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 3200);
   }
@@ -198,11 +319,13 @@
     for (let i = 0; i < w.asteroids; i++) {
       const p = spawnAwayFromPlayer(300);
       const r = rand(22, 55);
+      const quality = rand(0.7, 1.35); // ore quality multiplier
       G.asteroids.push({
         x: p.x, y: p.y, z: rand(-30, 30),
         r,
-        ore: Math.floor(r * 1.8),
-        maxOre: Math.floor(r * 1.8),
+        ore: Math.floor(r * 1.8 * quality),
+        maxOre: Math.floor(r * 1.8 * quality),
+        quality,
         angle: rand(0, Math.PI * 2),
         spin: rand(-1.2, 1.2),
         vx: rand(-20, 20),
@@ -212,6 +335,8 @@
 
     for (let i = 0; i < w.debris; i++) {
       const p = spawnAwayFromPlayer(250);
+      const rarity = Math.random();
+      const valueMult = rarity > 0.92 ? 2.2 : rarity > 0.75 ? 1.5 : 1;
       G.debris.push({
         x: p.x, y: p.y, z: rand(-15, 15),
         r: rand(8, 16),
@@ -220,7 +345,8 @@
         vx: rand(-35, 35),
         vy: rand(-35, 35),
         hp: 20,
-        value: Math.floor(rand(15, 40))
+        value: Math.floor(rand(15, 40) * valueMult),
+        rarity: valueMult
       });
     }
 
@@ -253,7 +379,12 @@
   // ─── ACTIONS ──────────────────────────────────────────────────────────────
   function fireLaser() {
     if (G.cooldowns.laser > 0) return;
+    if (G.fuel < 0.5) {
+      floatText(G.player.x, G.player.y - 25, 'NO FUEL', '#ff4060');
+      return;
+    }
     G.cooldowns.laser = CFG.player.laserCooldown;
+    G.fuel = Math.max(0, G.fuel - 0.4);
 
     const aim = Math.atan2(G.mouse.worldY - G.player.y, G.mouse.worldX - G.player.x);
     const spread = (Math.random() - 0.5) * 0.04;
@@ -265,7 +396,7 @@
       vx: Math.cos(a) * 900,
       vy: Math.sin(a) * 900,
       life: CFG.player.laserRange / 900,
-      damage: CFG.player.laserDamage
+      damage: effectiveLaserDamage()
     });
 
     spawnParticle(G.player.x + Math.cos(a) * 16, G.player.y + Math.sin(a) * 16, '#00c8ff', 0.2, 40);
@@ -273,15 +404,21 @@
 
   function deployNet() {
     if (G.cooldowns.net > 0) return;
+    if (G.fuel < 1.5) {
+      floatText(G.player.x, G.player.y - 25, 'NO FUEL', '#ff4060');
+      return;
+    }
     G.cooldowns.net = CFG.player.netCooldown;
+    G.fuel = Math.max(0, G.fuel - 1.2);
     const aim = Math.atan2(G.mouse.worldY - G.player.y, G.mouse.worldX - G.player.x);
+    const r = effectiveNetRadius();
     G.nets.push({
       x: G.player.x,
       y: G.player.y,
       tx: G.player.x + Math.cos(aim) * CFG.player.netRange,
       ty: G.player.y + Math.sin(aim) * CFG.player.netRange,
       progress: 0,
-      radius: 55,
+      radius: r,
       life: 1.1
     });
   }
@@ -296,63 +433,112 @@
     }
     G.miningTarget = best;
     if (!best) return;
-
-    if (force || G.keys['KeyE']) {
-      const extracted = Math.min(best.ore, CFG.player.mineRate * (force ? 0.05 : 0));
-      // continuous mining handled in update
-    }
   }
 
   function tryDock() {
-    if (dist(G.player, G.base) < G.base.r + 30) {
-      const healed = CFG.player.maxHull - G.hull;
-      if (healed > 0) {
-        G.hull = CFG.player.maxHull;
-        floatText(G.player.x, G.player.y - 40, 'HULL REPAIRED', '#00e5a0');
-        addScore(50, 'DOCK');
-      }
-      if (G.ore > 0) {
-        const value = G.ore * 3;
-        addScore(value, 'ORE');
-        G.tokens += Math.floor(G.ore / 10);
-        floatText(G.player.x, G.player.y - 60, `+${G.ore}kg SOLD`, '#ffc846');
-        G.ore = 0;
-        showAchievement('FIRST SALE', '+◆ tokens from ore');
-      }
+    const d = dist(G.player, G.base);
+    if (d < G.base.r + 40) {
+      G.docking = true;
+      // Instant repair + sell when fully docked (progress handled in update)
     }
   }
+
+  function completeDock() {
+    // Repair hull
+    const healed = CFG.player.maxHull - G.hull;
+    if (healed > 0) {
+      G.hull = CFG.player.maxHull;
+      floatText(G.player.x, G.player.y - 40, 'HULL REPAIRED', '#00e5a0');
+      addScore(40, 'DOCK');
+    }
+    // Refuel + shield top-up
+    G.fuel = maxFuel();
+    G.shield = maxShield();
+    floatText(G.player.x, G.player.y - 55, 'REFUEL + SHIELD', '#44aaff');
+
+    // Sell ore
+    if (G.ore > 0) {
+      const kg = G.ore;
+      const value = Math.floor(kg * CFG.player.oreSellScore);
+      const tok = Math.floor(kg / CFG.player.oreSellTokenDiv);
+      addScore(value, 'ORE');
+      G.tokens += tok;
+      G.sessionStats.oreSold += kg;
+      floatText(G.player.x, G.player.y - 70, `+${Math.floor(kg)}kg → +${tok}◆`, '#ffc846');
+      G.ore = 0;
+      showAchievement('FIRST SALE', 'Sold ore at base station');
+      if (kg >= maxCargo() * 0.95) {
+        showAchievement('FULL CARGO', 'Docked with a full hold');
+      }
+    }
+    G.docking = false;
+    G.dockProgress = 0;
+  }
+
+  function buyUpgrade(key) {
+    const cost = upgradeCost(key);
+    if (cost === null) return false;
+    if (G.tokens < cost) {
+      floatText(G.player.x, G.player.y - 30, 'NOT ENOUGH ◆', '#ff4060');
+      return false;
+    }
+    G.tokens -= cost;
+    G.upgrades[key] = (G.upgrades[key] || 0) + 1;
+    G.sessionStats.upgradesBought++;
+    // Apply immediate capacity bumps
+    if (key === 'shieldMax') G.shield = Math.min(G.shield + CFG.upgrades.shieldMax.perLevel, maxShield());
+    if (key === 'fuelTank') G.fuel = Math.min(G.fuel + CFG.upgrades.fuelTank.perLevel, maxFuel());
+    showAchievement('UPGRADE', `${CFG.upgrades[key].name} Lv.${G.upgrades[key]}`);
+    renderShopList();
+    return true;
+  }
+  window.buyUpgrade = buyUpgrade;
 
   // ─── UPDATE ───────────────────────────────────────────────────────────────
   function updatePlayer(dt) {
     const p = G.player;
     const aim = Math.atan2(G.mouse.worldY - p.y, G.mouse.worldX - p.x);
 
-    // Smooth turn toward aim
     let diff = aim - p.angle;
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
     p.angle += clamp(diff, -CFG.player.turnRate * dt, CFG.player.turnRate * dt);
 
-    // Thrust
     let ax = 0, ay = 0;
+    let thrusting = false;
+    const accel = effectiveAccel();
+
     if (G.keys['KeyW'] || G.keys['ArrowUp']) {
-      ax += Math.cos(p.angle) * CFG.player.accel;
-      ay += Math.sin(p.angle) * CFG.player.accel;
+      ax += Math.cos(p.angle) * accel;
+      ay += Math.sin(p.angle) * accel;
+      thrusting = true;
     }
     if (G.keys['KeyS'] || G.keys['ArrowDown']) {
-      ax -= Math.cos(p.angle) * CFG.player.accel * 0.55;
-      ay -= Math.sin(p.angle) * CFG.player.accel * 0.55;
+      ax -= Math.cos(p.angle) * accel * 0.55;
+      ay -= Math.sin(p.angle) * accel * 0.55;
+      thrusting = true;
     }
     if (G.keys['KeyA'] || G.keys['ArrowLeft']) {
-      ax += Math.cos(p.angle - Math.PI / 2) * CFG.player.accel * 0.7;
-      ay += Math.sin(p.angle - Math.PI / 2) * CFG.player.accel * 0.7;
+      ax += Math.cos(p.angle - Math.PI / 2) * accel * 0.7;
+      ay += Math.sin(p.angle - Math.PI / 2) * accel * 0.7;
+      thrusting = true;
     }
     if (G.keys['KeyD'] || G.keys['ArrowRight']) {
-      ax += Math.cos(p.angle + Math.PI / 2) * CFG.player.accel * 0.7;
-      ay += Math.sin(p.angle + Math.PI / 2) * CFG.player.accel * 0.7;
+      ax += Math.cos(p.angle + Math.PI / 2) * accel * 0.7;
+      ay += Math.sin(p.angle + Math.PI / 2) * accel * 0.7;
+      thrusting = true;
     }
 
-    // Emergency brake
+    // Fuel burn for thrust
+    if (thrusting) {
+      if (G.fuel <= 0) {
+        ax *= 0.15;
+        ay *= 0.15;
+      } else {
+        G.fuel = Math.max(0, G.fuel - CFG.player.fuelBurnThrust * dt);
+      }
+    }
+
     if (G.keys['ShiftLeft'] || G.keys['ShiftRight']) {
       p.vx *= 0.90;
       p.vy *= 0.90;
@@ -361,11 +547,11 @@
     p.vx += ax * dt;
     p.vy += ay * dt;
 
-    // Cap speed
+    const maxSp = effectiveMaxSpeed();
     const sp = Math.hypot(p.vx, p.vy);
-    if (sp > CFG.player.maxSpeed) {
-      p.vx = (p.vx / sp) * CFG.player.maxSpeed;
-      p.vy = (p.vy / sp) * CFG.player.maxSpeed;
+    if (sp > maxSp) {
+      p.vx = (p.vx / sp) * maxSp;
+      p.vy = (p.vy / sp) * maxSp;
     }
 
     p.vx *= Math.pow(CFG.player.damp, dt * 60);
@@ -374,49 +560,72 @@
     p.x += p.vx * dt;
     p.y += p.vy * dt;
 
-    // Soft world bounds
     const m = 40;
     if (p.x < m) { p.x = m; p.vx *= -0.4; }
     if (p.y < m) { p.y = m; p.vy *= -0.4; }
     if (p.x > CFG.world.w - m) { p.x = CFG.world.w - m; p.vx *= -0.4; }
     if (p.y > CFG.world.h - m) { p.y = CFG.world.h - m; p.vy *= -0.4; }
 
-    // Visual bank / pitch from velocity
     p.roll = clamp(-p.vx * 0.0015 + diff * 0.3, -0.5, 0.5);
     p.pitch = clamp(p.vy * 0.001, -0.3, 0.3);
 
-    // Engine particles
-    if (ax !== 0 || ay !== 0) {
-      if (Math.random() < 0.7) {
-        spawnParticle(
-          p.x - Math.cos(p.angle) * 16,
-          p.y - Math.sin(p.angle) * 16,
-          '#ff6b35', 0.35, 50
-        );
-      }
+    if (thrusting && G.fuel > 0 && Math.random() < 0.7) {
+      spawnParticle(
+        p.x - Math.cos(p.angle) * 16,
+        p.y - Math.sin(p.angle) * 16,
+        '#ff6b35', 0.35, 50
+      );
     }
 
-    // Actions
     if (G.mouse.left) fireLaser();
     if (G.mouse.right) deployNet();
 
-    // Continuous mining
+    // Continuous mining with fuel + cargo limits
     tryMine(false);
     if (G.miningTarget && G.keys['KeyE'] && G.miningTarget.ore > 0) {
-      const rate = CFG.player.mineRate * dt;
-      const take = Math.min(G.miningTarget.ore, rate);
-      G.miningTarget.ore -= take;
-      G.ore += take;
-      if (Math.random() < 0.4) {
-        spawnParticle(G.miningTarget.x, G.miningTarget.y, '#c0a060', 0.4, 40);
+      if (G.fuel <= 0) {
+        floatText(p.x, p.y - 25, 'NO FUEL', '#ff4060');
+      } else if (G.ore >= maxCargo()) {
+        floatText(p.x, p.y - 25, 'CARGO FULL', '#ffc846');
+        showAchievement('FULL CARGO', 'Hold is at capacity — dock to sell');
+      } else {
+        G.fuel = Math.max(0, G.fuel - CFG.player.fuelBurnMine * dt);
+        const rate = effectiveMineRate() * dt;
+        const space = maxCargo() - G.ore;
+        const take = Math.min(G.miningTarget.ore, rate, space);
+        G.miningTarget.ore -= take;
+        G.ore += take;
+        if (Math.random() < 0.4) {
+          spawnParticle(G.miningTarget.x, G.miningTarget.y, '#c0a060', 0.4, 40);
+        }
+        if (G.miningTarget.ore <= 0) {
+          const qualityBonus = Math.floor(80 * (G.miningTarget.quality || 1));
+          burst(G.miningTarget.x, G.miningTarget.y, '#c0a060', 16);
+          addScore(qualityBonus, 'ASTEROID');
+          G.asteroids = G.asteroids.filter(a => a !== G.miningTarget);
+          G.miningTarget = null;
+          showAchievement('ASTEROID CRACKED', 'First asteroid fully mined');
+        }
       }
-      if (G.miningTarget.ore <= 0) {
-        burst(G.miningTarget.x, G.miningTarget.y, '#c0a060', 16);
-        addScore(80, 'ASTEROID');
-        G.asteroids = G.asteroids.filter(a => a !== G.miningTarget);
-        G.miningTarget = null;
-        showAchievement('ASTEROID CRACKED', 'First asteroid fully mined');
+    }
+
+    // Shield regen
+    G.shieldHitT += dt;
+    if (G.shieldHitT > CFG.player.shieldRegenDelay && G.shield < maxShield()) {
+      G.shield = Math.min(maxShield(), G.shield + CFG.player.shieldRegen * dt);
+    }
+
+    // Docking progress
+    if (G.docking) {
+      if (dist(p, G.base) > G.base.r + 45) {
+        G.docking = false;
+        G.dockProgress = 0;
+      } else {
+        G.dockProgress = Math.min(1, G.dockProgress + dt * 0.85);
+        if (G.dockProgress >= 1) completeDock();
       }
+    } else if (dist(p, G.base) < G.base.r + 30 && G.keys['KeyR']) {
+      G.docking = true;
     }
   }
 
@@ -428,7 +637,6 @@
       L.life -= dt;
       if (L.life <= 0) { G.lasers.splice(i, 1); continue; }
 
-      // Hit debris
       for (let j = G.debris.length - 1; j >= 0; j--) {
         const d = G.debris[j];
         if (Math.hypot(L.x - d.x, L.y - d.y) < d.r + 4) {
@@ -436,10 +644,12 @@
           burst(L.x, L.y, '#00c8ff', 6);
           G.lasers.splice(i, 1);
           if (d.hp <= 0) {
+            const distBonus = 1 + Math.min(0.4, dist(G.player, d) / 800);
+            const score = Math.floor(d.value * distBonus * (d.rarity || 1));
             burst(d.x, d.y, '#b06aff', 14);
-            addScore(d.value, 'DEBRIS');
+            addScore(score, 'DEBRIS');
             G.debrisCleared++;
-            G.tokens += 1;
+            G.tokens += d.rarity > 1.5 ? 2 : 1;
             G.debris.splice(j, 1);
           }
           break;
@@ -447,7 +657,6 @@
       }
       if (!G.lasers[i]) continue;
 
-      // Hit mines
       for (let j = G.mines.length - 1; j >= 0; j--) {
         const m = G.mines[j];
         if (Math.hypot(L.x - m.x, L.y - m.y) < m.r + 6) {
@@ -461,7 +670,6 @@
       }
       if (!G.lasers[i]) continue;
 
-      // Hit drones
       for (let j = G.drones.length - 1; j >= 0; j--) {
         const dr = G.drones[j];
         if (Math.hypot(L.x - dr.x, L.y - dr.y) < dr.r + 5) {
@@ -469,8 +677,9 @@
           burst(L.x, L.y, '#ff4060', 5);
           G.lasers.splice(i, 1);
           if (dr.hp <= 0) {
+            const distBonus = 1 + Math.min(0.35, dist(G.player, dr) / 700);
             burst(dr.x, dr.y, '#ff4060', 18);
-            addScore(120, 'DRONE');
+            addScore(Math.floor(120 * distBonus), 'DRONE');
             G.tokens += 3;
             G.drones.splice(j, 1);
             showAchievement('DRONE HUNTER', 'Destroyed a hostile drone');
@@ -490,7 +699,6 @@
       const cy = n.y + (n.ty - n.y) * n.progress;
 
       if (n.progress >= 0.85) {
-        // Capture debris
         for (let j = G.debris.length - 1; j >= 0; j--) {
           const d = G.debris[j];
           if (Math.hypot(cx - d.x, cy - d.y) < n.radius) {
@@ -501,7 +709,6 @@
             G.debris.splice(j, 1);
           }
         }
-        // Capture / disable drones
         for (let j = G.drones.length - 1; j >= 0; j--) {
           const dr = G.drones[j];
           if (Math.hypot(cx - dr.x, cy - dr.y) < n.radius) {
@@ -517,7 +724,6 @@
   }
 
   function updateEnemies(dt) {
-    // Mines
     for (let i = G.mines.length - 1; i >= 0; i--) {
       const m = G.mines[i];
       m.pulse += dt * 4;
@@ -529,7 +735,6 @@
       }
     }
 
-    // Drones — chase + shoot
     for (const dr of G.drones) {
       const ang = angleTo(dr, G.player);
       dr.angle = ang;
@@ -556,7 +761,6 @@
       }
     }
 
-    // Enemy laser hits player
     for (let i = G.lasers.length - 1; i >= 0; i--) {
       const L = G.lasers[i];
       if (!L.enemy) continue;
@@ -608,14 +812,18 @@
 
   function checkWaveClear() {
     if (G.debris.length === 0 && G.mines.length === 0 && G.drones.length === 0) {
-      // Asteroids optional — wave clears when threats gone
       const w = CFG.waves[Math.min(G.wave, CFG.waves.length - 1)];
       G.score += w.bonus;
-      G.tokens += 5 + G.wave * 2;
+      const waveTok = 5 + G.wave * 2;
+      G.tokens += waveTok;
       document.getElementById('waveClearTitle').textContent = `LEVEL ${G.wave + 1} COMPLETE`;
       document.getElementById('waveBonus').textContent = `+${w.bonus}`;
       document.getElementById('totalScoreWave').textContent = G.score.toLocaleString();
-      document.getElementById('waveTokens').textContent = `+${5 + G.wave * 2}`;
+      document.getElementById('waveTokens').textContent = `+${waveTok}`;
+      const detail = document.getElementById('waveDetail');
+      if (detail) {
+        detail.textContent = `Ore in hold: ${Math.floor(G.ore)} kg · Cargo ${Math.floor(G.ore)}/${Math.floor(maxCargo())} · Shield ${Math.floor(G.shield)}/${Math.floor(maxShield())}`;
+      }
       document.getElementById('nextWaveMsg').textContent =
         G.wave + 1 >= CFG.waves.length ? 'Final sector cleared — endless mode!' : `Preparing Wave ${G.wave + 2} deployment...`;
       G.running = false;
@@ -630,8 +838,9 @@
     G.cooldowns.laser = Math.max(0, G.cooldowns.laser - dt);
     G.cooldowns.net = Math.max(0, G.cooldowns.net - dt);
     G.camera.shake = Math.max(0, G.camera.shake - dt * 18);
+    if (G.combo.timer > 0) G.combo.timer -= dt;
+    else G.combo.count = 0;
 
-    // Mouse world position (camera-relative)
     const cx = G.player.x;
     const cy = G.player.y;
     G.mouse.worldX = G.mouse.x - canvas.width / 2 + cx;
@@ -645,13 +854,12 @@
     updateParticles(dt);
     checkWaveClear();
 
-    // Camera follow
     G.camera.x = G.player.x;
     G.camera.y = G.player.y;
   }
   window.update = update;
 
-  // ─── 2D RENDER (HUD + overlays; 3D scene draws behind) ────────────────────
+  // ─── 2D RENDER ────────────────────────────────────────────────────────────
   function worldToScreen(x, y) {
     const shakeX = (Math.random() - 0.5) * G.camera.shake * 2;
     const shakeY = (Math.random() - 0.5) * G.camera.shake * 2;
@@ -666,7 +874,6 @@
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(p.angle);
-    // body
     ctx.fillStyle = '#00c8ff';
     ctx.shadowColor = '#00c8ff';
     ctx.shadowBlur = 12;
@@ -677,13 +884,20 @@
     ctx.lineTo(-10, 9);
     ctx.closePath();
     ctx.fill();
-    // cockpit
     ctx.fillStyle = '#00ffff';
     ctx.beginPath();
     ctx.arc(4, 0, 3.5, 0, Math.PI * 2);
     ctx.fill();
-    // thruster glow
-    const thrust = (G.keys['KeyW'] || G.keys['ArrowUp']) ? 1 : 0.2;
+    // Shield ring when active
+    if (G.shield > 0) {
+      const sp = G.shield / maxShield();
+      ctx.strokeStyle = `rgba(68,170,255,${0.25 + sp * 0.45})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 20, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const thrust = (G.keys['KeyW'] || G.keys['ArrowUp']) && G.fuel > 0 ? 1 : 0.2;
     ctx.fillStyle = `rgba(255,107,53,${0.5 + thrust * 0.5})`;
     ctx.beginPath();
     ctx.moveTo(-10, -4);
@@ -694,34 +908,39 @@
   }
 
   function render() {
-    // Clear with transparent so Three.js layer shows through
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (!G.running && titleScreen && !titleScreen.classList.contains('hidden')) {
-      return; // title screen only
+      return;
     }
 
-    // Soft vignette / space dust in 2D
     ctx.fillStyle = 'rgba(2,13,24,0.15)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Base station
     {
       const s = worldToScreen(G.base.x, G.base.y);
-      ctx.strokeStyle = 'rgba(0,229,160,0.5)';
-      ctx.lineWidth = 2;
+      const dockColor = G.docking ? '#ffc846' : 'rgba(0,229,160,0.5)';
+      ctx.strokeStyle = dockColor;
+      ctx.lineWidth = G.docking ? 3 : 2;
       ctx.beginPath();
       ctx.arc(s.x, s.y, G.base.r, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(0,229,160,0.08)';
+      ctx.fillStyle = G.docking ? 'rgba(255,200,70,0.12)' : 'rgba(0,229,160,0.08)';
       ctx.fill();
+      if (G.docking && G.dockProgress > 0) {
+        ctx.strokeStyle = '#ffc846';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, G.base.r + 8, -Math.PI / 2, -Math.PI / 2 + G.dockProgress * Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.fillStyle = '#00e5a0';
       ctx.font = '11px Courier New';
       ctx.textAlign = 'center';
-      ctx.fillText('BASE  [R] DOCK', s.x, s.y + G.base.r + 14);
+      ctx.fillText(G.docking ? 'DOCKING…' : 'BASE  [R] DOCK', s.x, s.y + G.base.r + 14);
     }
 
-    // Asteroids (2D fallback / outline)
     for (const a of G.asteroids) {
       const s = worldToScreen(a.x, a.y);
       const orePct = a.ore / a.maxOre;
@@ -753,21 +972,19 @@
       }
     }
 
-    // Debris
     for (const d of G.debris) {
       const s = worldToScreen(d.x, d.y);
       ctx.save();
       ctx.translate(s.x, s.y);
       ctx.rotate(d.angle);
-      ctx.fillStyle = '#8af';
-      ctx.strokeStyle = '#b06aff';
+      ctx.fillStyle = d.rarity > 1.5 ? '#ffc846' : '#8af';
+      ctx.strokeStyle = d.rarity > 1.5 ? '#ffc846' : '#b06aff';
       ctx.lineWidth = 1;
       ctx.fillRect(-d.r * 0.7, -d.r * 0.5, d.r * 1.4, d.r);
       ctx.strokeRect(-d.r * 0.7, -d.r * 0.5, d.r * 1.4, d.r);
       ctx.restore();
     }
 
-    // Mines
     for (const m of G.mines) {
       const s = worldToScreen(m.x, m.y);
       const pulse = 0.5 + Math.sin(m.pulse) * 0.5;
@@ -782,7 +999,6 @@
       ctx.fill();
     }
 
-    // Drones
     for (const dr of G.drones) {
       const s = worldToScreen(dr.x, dr.y);
       ctx.save();
@@ -798,7 +1014,6 @@
       ctx.lineTo(-8, 7);
       ctx.closePath();
       ctx.fill();
-      // hp bar
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#333';
       ctx.fillRect(-10, -16, 20, 3);
@@ -807,7 +1022,6 @@
       ctx.restore();
     }
 
-    // Nets
     for (const n of G.nets) {
       const cx = n.x + (n.tx - n.x) * n.progress;
       const cy = n.y + (n.ty - n.y) * n.progress;
@@ -817,7 +1031,6 @@
       ctx.beginPath();
       ctx.arc(s.x, s.y, n.radius * n.progress, 0, Math.PI * 2);
       ctx.stroke();
-      // spokes
       for (let k = 0; k < 6; k++) {
         const a = (k / 6) * Math.PI * 2 + G.t * 2;
         ctx.beginPath();
@@ -827,7 +1040,6 @@
       }
     }
 
-    // Lasers
     for (const L of G.lasers) {
       const s = worldToScreen(L.x, L.y);
       ctx.strokeStyle = L.enemy ? '#ff4060' : '#00c8ff';
@@ -841,7 +1053,6 @@
       ctx.shadowBlur = 0;
     }
 
-    // Particles (2D)
     for (const P of G.particles) {
       const s = worldToScreen(P.x, P.y);
       const alpha = P.life / P.maxLife;
@@ -853,7 +1064,6 @@
       ctx.globalAlpha = 1;
     }
 
-    // Floating text
     for (const f of G.floatingText) {
       const s = worldToScreen(f.x, f.y);
       ctx.globalAlpha = Math.max(0, f.life);
@@ -864,10 +1074,8 @@
       ctx.globalAlpha = 1;
     }
 
-    // Player ship (2D silhouette always; 3D mesh is bonus)
     if (G.running) drawShip(G.player);
 
-    // Crosshair
     if (G.running && !G.paused) {
       ctx.strokeStyle = 'rgba(0,200,255,0.7)';
       ctx.lineWidth = 1;
@@ -880,83 +1088,205 @@
       ctx.stroke();
     }
 
-    // HUD
     if (G.running) drawHUD();
   }
   window.render = render;
 
+  function drawBar(x, y, w, h, pct, color, label) {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w * clamp(pct, 0, 1), h);
+    ctx.strokeStyle = 'rgba(0,200,255,0.35)';
+    ctx.strokeRect(x, y, w, h);
+    if (label) {
+      ctx.fillStyle = 'rgba(180,230,255,0.75)';
+      ctx.font = '10px Courier New';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, x, y - 3);
+    }
+  }
+
   function drawHUD() {
-    const pad = 16;
+    const pad = 14;
     ctx.textAlign = 'left';
     ctx.font = '12px Courier New';
 
-    // Top-left status
+    // Top-left
     ctx.fillStyle = 'rgba(0,200,255,0.85)';
     ctx.fillText(`SCORE  ${G.score.toLocaleString()}`, pad, pad + 12);
-    ctx.fillStyle = 'rgba(0,229,160,0.85)';
+    ctx.fillStyle = 'rgba(0,229,160,0.9)';
     ctx.fillText(`TOKENS ◆ ${G.tokens}`, pad, pad + 28);
     ctx.fillStyle = 'rgba(255,200,70,0.85)';
-    ctx.fillText(`ORE  ${Math.floor(G.ore)} kg`, pad, pad + 44);
-    ctx.fillStyle = 'rgba(180,230,255,0.6)';
+    ctx.fillText(`ORE  ${Math.floor(G.ore)} / ${Math.floor(maxCargo())} kg`, pad, pad + 44);
+    ctx.fillStyle = 'rgba(180,230,255,0.55)';
     ctx.fillText(`WAVE  ${G.wave + 1} / ${CFG.waves.length}`, pad, pad + 60);
     ctx.fillText(`DEBRIS  ${G.debrisCleared}`, pad, pad + 76);
+    if (G.combo.count > 1 && G.combo.timer > 0) {
+      ctx.fillStyle = '#ffc846';
+      ctx.fillText(`COMBO x${G.combo.count}`, pad, pad + 92);
+    }
 
-    // Hull bar
-    const bw = 160, bh = 10;
-    const bx = pad, by = canvas.height - pad - bh - 8;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(bx, by, bw, bh);
-    const hp = G.hull / CFG.player.maxHull;
-    ctx.fillStyle = hp > 0.4 ? '#00e5a0' : hp > 0.2 ? '#ffc846' : '#ff4060';
-    ctx.fillRect(bx, by, bw * hp, bh);
-    ctx.strokeStyle = 'rgba(0,200,255,0.4)';
-    ctx.strokeRect(bx, by, bw, bh);
-    ctx.fillStyle = 'rgba(180,230,255,0.7)';
-    ctx.font = '10px Courier New';
-    ctx.fillText('HULL', bx, by - 4);
+    // Bars bottom-left
+    const bw = 150, bh = 9;
+    let by = canvas.height - pad - 8;
+    drawBar(pad, by - bh, bw, bh, G.hull / CFG.player.maxHull,
+      G.hull > 40 ? '#00e5a0' : G.hull > 20 ? '#ffc846' : '#ff4060', 'HULL');
+    by -= 22;
+    drawBar(pad, by - bh, bw, bh, G.shield / maxShield(), '#44aaff', 'SHIELD');
+    by -= 22;
+    drawBar(pad, by - bh, bw, bh, G.fuel / maxFuel(),
+      G.fuel > 25 ? '#ffaa33' : '#ff4060', 'FUEL');
+    by -= 22;
+    drawBar(pad, by - bh, bw, bh, G.ore / maxCargo(), '#c0a060', 'CARGO');
 
-    // Cooldowns
-    const cx = canvas.width - pad - 100;
+    // Cooldowns + tips top-right
+    const cx = canvas.width - pad - 110;
     ctx.fillStyle = 'rgba(180,230,255,0.5)';
+    ctx.textAlign = 'left';
     ctx.fillText(`LASER ${G.cooldowns.laser > 0 ? G.cooldowns.laser.toFixed(1) + 's' : 'RDY'}`, cx, pad + 12);
     ctx.fillText(`NET   ${G.cooldowns.net > 0 ? G.cooldowns.net.toFixed(1) + 's' : 'RDY'}`, cx, pad + 28);
     if (G.miningTarget) {
       ctx.fillStyle = '#00e5a0';
       ctx.fillText('MINING [E]', cx, pad + 44);
     }
+    ctx.fillStyle = 'rgba(180,230,255,0.4)';
+    ctx.fillText('[U] SHOP', cx, pad + 60);
 
-    // Minimap
-    const mw = 120, mh = 120;
+    // Improved radar / minimap
+    const mw = 140, mh = 140;
     const mx = canvas.width - pad - mw;
     const my = canvas.height - pad - mh;
-    ctx.fillStyle = 'rgba(0,20,40,0.65)';
+    ctx.fillStyle = 'rgba(0,15,30,0.72)';
     ctx.fillRect(mx, my, mw, mh);
-    ctx.strokeStyle = 'rgba(0,200,255,0.3)';
+    ctx.strokeStyle = 'rgba(0,200,255,0.4)';
     ctx.strokeRect(mx, my, mw, mh);
+
+    // Range rings
     const sx = mw / CFG.world.w;
     const sy = mh / CFG.world.h;
-    // base
+    const prx = mx + G.player.x * sx;
+    const pry = my + G.player.y * sy;
+    ctx.strokeStyle = 'rgba(0,200,255,0.12)';
+    ctx.lineWidth = 1;
+    for (const ring of [200, 500, 1000]) {
+      ctx.beginPath();
+      ctx.ellipse(prx, pry, ring * sx, ring * sy, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Base
     ctx.fillStyle = '#00e5a0';
     ctx.beginPath();
-    ctx.arc(mx + G.base.x * sx, my + G.base.y * sy, 3, 0, Math.PI * 2);
+    ctx.arc(mx + G.base.x * sx, my + G.base.y * sy, 4, 0, Math.PI * 2);
     ctx.fill();
-    // player
-    ctx.fillStyle = '#00c8ff';
-    ctx.beginPath();
-    ctx.arc(mx + G.player.x * sx, my + G.player.y * sy, 3, 0, Math.PI * 2);
-    ctx.fill();
-    // threats
-    ctx.fillStyle = '#ff4060';
-    for (const d of G.drones) {
-      ctx.fillRect(mx + d.x * sx - 1, my + d.y * sy - 1, 2, 2);
-    }
-    ctx.fillStyle = '#ff8844';
-    for (const m of G.mines) {
-      ctx.fillRect(mx + m.x * sx - 1, my + m.y * sy - 1, 2, 2);
-    }
+
+    // Asteroids (brown)
     ctx.fillStyle = '#c0a060';
     for (const a of G.asteroids) {
-      ctx.fillRect(mx + a.x * sx - 1, my + a.y * sy - 1, 2, 2);
+      const sz = 1.5 + (a.r / 55) * 1.5;
+      ctx.fillRect(mx + a.x * sx - sz / 2, my + a.y * sy - sz / 2, sz, sz);
+    }
+    // Debris (purple / gold if rare)
+    for (const d of G.debris) {
+      ctx.fillStyle = d.rarity > 1.5 ? '#ffc846' : '#b06aff';
+      ctx.fillRect(mx + d.x * sx - 1, my + d.y * sy - 1, 2.5, 2.5);
+    }
+    // Mines — blink
+    const blink = Math.sin(G.t * 8) > 0;
+    ctx.fillStyle = blink ? '#ff4060' : '#aa2030';
+    for (const m of G.mines) {
+      ctx.beginPath();
+      ctx.arc(mx + m.x * sx, my + m.y * sy, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Drones — threat size by distance
+    for (const d of G.drones) {
+      const dd = dist(G.player, d);
+      const sz = clamp(4 - dd / 400, 2, 4);
+      ctx.fillStyle = dd < 300 ? '#ff2040' : '#ff6080';
+      ctx.beginPath();
+      ctx.arc(mx + d.x * sx, my + d.y * sy, sz, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Player
+    ctx.fillStyle = '#00c8ff';
+    ctx.beginPath();
+    ctx.arc(prx, pry, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Player facing
+    ctx.strokeStyle = '#00c8ff';
+    ctx.beginPath();
+    ctx.moveTo(prx, pry);
+    ctx.lineTo(prx + Math.cos(G.player.angle) * 8, pry + Math.sin(G.player.angle) * 8);
+    ctx.stroke();
+
+    // Dock progress UI near ship if docking
+    if (G.docking) {
+      const s = worldToScreen(G.player.x, G.player.y);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(s.x - 40, s.y - 36, 80, 8);
+      ctx.fillStyle = '#ffc846';
+      ctx.fillRect(s.x - 40, s.y - 36, 80 * G.dockProgress, 8);
+      ctx.fillStyle = '#ffc846';
+      ctx.font = '10px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('DOCKING', s.x, s.y - 40);
+    }
+  }
+
+  // ─── SHOP UI ──────────────────────────────────────────────────────────────
+  function renderShopList() {
+    const list = document.getElementById('shopList');
+    if (!list) return;
+    list.innerHTML = '';
+    const tokEl = document.getElementById('shopTokens');
+    if (tokEl) tokEl.textContent = G.tokens;
+
+    for (const key of Object.keys(CFG.upgrades)) {
+      const def = CFG.upgrades[key];
+      const lvl = G.upgrades[key] || 0;
+      const cost = upgradeCost(key);
+      const row = document.createElement('div');
+      row.className = 'shop-row';
+      const maxed = cost === null;
+      let effect = '';
+      if (key === 'cargoCap') effect = `+${def.perLevel} kg`;
+      else if (key === 'shieldMax') effect = `+${def.perLevel} shield`;
+      else if (key === 'fuelTank') effect = `+${def.perLevel} fuel`;
+      else effect = `+${Math.round(def.perLevel * 100)}%`;
+
+      row.innerHTML = `
+        <div class="shop-info">
+          <div class="shop-name">${def.name}</div>
+          <div class="shop-meta">Lv ${lvl}/${def.max} · ${effect}</div>
+        </div>
+        <button class="shop-buy" data-key="${key}" ${maxed || G.tokens < cost ? 'disabled' : ''}>
+          ${maxed ? 'MAX' : cost + ' ◆'}
+        </button>`;
+      list.appendChild(row);
+    }
+
+    list.querySelectorAll('.shop-buy').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const k = btn.getAttribute('data-key');
+        if (buyUpgrade(k)) renderShopList();
+      });
+    });
+  }
+
+  function openShop() {
+    if (!shopScreen) return;
+    G.paused = true;
+    pauseScreen?.classList.add('hidden');
+    shopScreen.classList.remove('hidden');
+    renderShopList();
+  }
+
+  function closeShop() {
+    shopScreen?.classList.add('hidden');
+    if (G.running) {
+      G.paused = false;
     }
   }
 
@@ -966,15 +1296,25 @@
     pauseScreen?.classList.add('hidden');
     waveClearScreen?.classList.add('hidden');
     gameOverScreen?.classList.add('hidden');
+    shopScreen?.classList.add('hidden');
 
     G.running = true;
     G.paused = false;
     G.wave = 0;
     G.score = 0;
-    G.tokens = 0;
+    G.tokens = 8; // small starting allowance
     G.ore = 0;
     G.debrisCleared = 0;
     G.hull = CFG.player.maxHull;
+    G.fuel = CFG.player.maxFuel;
+    G.shield = CFG.player.maxShield;
+    G.shieldHitT = 99;
+    G.docking = false;
+    G.dockProgress = 0;
+    G.upgrades = {
+      miningSpeed: 0, laserDamage: 0, netRadius: 0,
+      enginePower: 0, cargoCap: 0, shieldMax: 0, fuelTank: 0
+    };
     G.player.x = CFG.world.w / 2;
     G.player.y = CFG.world.h / 2;
     G.player.vx = 0;
@@ -983,6 +1323,8 @@
     G.particles = [];
     G.floatingText = [];
     G.achievements = new Set();
+    G.combo = { count: 0, timer: 0 };
+    G.sessionStats = { oreSold: 0, damageBlocked: 0, upgradesBought: 0 };
     spawnWave(0);
 
     if (typeof window.initThreeRenderer === 'function') {
@@ -994,6 +1336,9 @@
     waveClearScreen?.classList.add('hidden');
     G.wave++;
     G.running = true;
+    // Soft refuel between waves
+    G.fuel = Math.min(maxFuel(), G.fuel + maxFuel() * 0.35);
+    G.shield = Math.min(maxShield(), G.shield + maxShield() * 0.4);
     spawnWave(G.wave);
   }
 
@@ -1007,13 +1352,16 @@
     document.getElementById('finalScore').textContent = G.score.toLocaleString();
     document.getElementById('finalWave').textContent = G.wave;
     document.getElementById('finalDebris').textContent = G.debrisCleared;
-    document.getElementById('finalOre').textContent = Math.floor(G.ore) + ' kg';
+    document.getElementById('finalOre').textContent = Math.floor(G.sessionStats.oreSold) + ' kg';
     document.getElementById('finalTokens').textContent = G.tokens;
+    const extra = document.getElementById('finalExtra');
+    if (extra) {
+      extra.textContent = `Blocked ${Math.floor(G.sessionStats.damageBlocked)} dmg · ${G.sessionStats.upgradesBought} upgrades`;
+    }
     gameOverScreen?.classList.remove('hidden');
   }
 
   // ─── BOOT ─────────────────────────────────────────────────────────────────
-  // gameLoop lives at bottom of original file style — keep RAF here if game.js is sole loop
   let lastTime = performance.now();
   function gameLoop(now) {
     const dt = Math.min((now - lastTime) / 1000, 0.05);

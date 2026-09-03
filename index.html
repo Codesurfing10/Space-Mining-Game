@@ -60,7 +60,7 @@ body::before {
 .start-btn:hover { background:rgba(0,200,255,.12); box-shadow:0 0 18px rgba(0,200,255,.3); }
 .score-big { font-size:clamp(22px,3vw,42px); color:var(--gold); letter-spacing:.1em; }
 .score-label { font-size:clamp(10px,1.2vw,13px); color:var(--txt2); letter-spacing:.15em; }
-.stat-row { display:flex; gap:40px; justify-content:center; }
+.stat-row { display:flex; gap:40px; justify-content:center; flex-wrap:wrap; }
 .stat-block { text-align:center; }
 .stat-val { font-size:clamp(16px,2vw,26px); color:var(--cyan); }
 .stat-lbl { font-size:10px; color:var(--txt2); letter-spacing:.12em; }
@@ -79,6 +79,40 @@ body::before {
 .achievement-title { font-weight:bold; color:var(--gold); letter-spacing:.05em; margin-bottom:4px; }
 .achievement-reward { color:var(--green); font-size:11px; margin-top:4px; }
 .crypto-badge { color:#00ff88; font-weight:bold; }
+
+/* ── UPGRADE SHOP ── */
+#shopScreen {
+  justify-content:flex-start;
+  padding-top:clamp(40px,8vh,80px);
+  overflow-y:auto;
+}
+.shop-panel {
+  width:min(520px,92vw);
+  background:rgba(0,30,50,.85);
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:20px 22px;
+}
+.shop-header {
+  display:flex; justify-content:space-between; align-items:baseline;
+  margin-bottom:14px; border-bottom:1px solid var(--line); padding-bottom:10px;
+}
+.shop-title { color:var(--cyan); letter-spacing:.2em; font-size:16px; }
+.shop-tokens { color:var(--green); font-size:15px; }
+.shop-row {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; padding:10px 0; border-bottom:1px solid rgba(0,200,255,.08);
+}
+.shop-name { color:var(--txt); font-size:13px; letter-spacing:.06em; }
+.shop-meta { color:var(--txt2); font-size:11px; margin-top:2px; }
+.shop-buy {
+  min-width:72px; padding:6px 12px;
+  background:transparent; border:1px solid var(--gold); color:var(--gold);
+  font-family:var(--fnt); font-size:12px; cursor:pointer; letter-spacing:.08em;
+}
+.shop-buy:hover:not(:disabled) { background:rgba(255,200,70,.15); }
+.shop-buy:disabled { opacity:.4; cursor:default; border-color:var(--txt2); color:var(--txt2); }
+.shop-hint { margin-top:12px; font-size:11px; color:var(--txt2); text-align:center; letter-spacing:.06em; }
 </style>
 </head>
 <body>
@@ -93,24 +127,23 @@ body::before {
 <div class="screen" id="titleScreen">
   <div style="font-size:clamp(9px,1vw,11px);color:var(--txt2);letter-spacing:.25em">AUTONOMOUS REMEDIATION &amp; INTERCEPTION ARCHITECTURE</div>
   <h1>A·R·I·A</h1>
-  <div class="sub">SPACE MINING &amp; DEBRIS CLEANUP · v5.0 — Improved 3D Gameplay</div>
+  <div class="sub">SPACE MINING &amp; DEBRIS CLEANUP · v5.1 — Ship Systems &amp; Upgrades</div>
   <div class="tagline">
     Low-Earth orbit is a war zone of dead satellites and rocket bodies.<br>
-    You are the A·R·I·A spacecraft — the last line of defense.<br>
-    Mine asteroids. Capture debris. Avoid mines. Destroy drones. Earn crypto rewards!
+    Mine asteroids, manage fuel &amp; shields, fill cargo, dock to sell, upgrade your ship.
   </div>
   <div class="controls-grid">
-    <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span class="ctrl-act">Thrust spacecraft</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">LEFT CLICK</span><span class="ctrl-act">Fire laser (debris / mines / drones)</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span class="ctrl-act">Thrust (uses fuel)</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">LEFT CLICK</span><span class="ctrl-act">Fire laser</span></div>
     <div class="ctrl-row"><span class="ctrl-key">SHIFT</span><span class="ctrl-act">Emergency brake</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">RIGHT CLICK</span><span class="ctrl-act">Deploy capture net (debris / drones)</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">E</span><span class="ctrl-act">Mining arm (near asteroid)</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">R</span><span class="ctrl-act">Dock at base station</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">ESC</span><span class="ctrl-act">Pause game</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">MOUSE</span><span class="ctrl-act">Aim turret / arms</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">RIGHT CLICK</span><span class="ctrl-act">Capture net</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">E</span><span class="ctrl-act">Mine asteroid (hold)</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">R</span><span class="ctrl-act">Dock at base</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">U</span><span class="ctrl-act">Upgrade shop</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">ESC</span><span class="ctrl-act">Pause</span></div>
   </div>
   <button class="start-btn" id="startBtn">▶ LAUNCH MISSION</button>
-  <div style="font-size:10px;color:var(--txt2);letter-spacing:.1em;margin-top:4px">10 levels · Proximity mines · Hostile drones · Hazard zones · Crypto achievements</div>
+  <div style="font-size:10px;color:var(--txt2);letter-spacing:.1em;margin-top:4px">Fuel · Shield · Cargo · Upgrades · Improved radar</div>
 </div>
 
 <!-- PAUSE SCREEN -->
@@ -118,7 +151,21 @@ body::before {
   <h1 style="font-size:clamp(20px,3vw,36px)">MISSION PAUSED</h1>
   <div class="tagline" style="color:var(--txt2)">Press ESC or click to resume</div>
   <button class="start-btn" id="resumeBtn">▶ RESUME</button>
-  <button class="start-btn" style="border-color:var(--gold);color:var(--gold);margin-top:4px" id="restartFromPauseBtn">↺ RESTART</button>
+  <button class="start-btn" style="border-color:var(--gold);color:var(--gold);margin-top:4px" id="shopFromPauseBtn">◆ UPGRADE SHOP</button>
+  <button class="start-btn" style="border-color:var(--red);color:var(--red);margin-top:4px" id="restartFromPauseBtn">↺ RESTART</button>
+</div>
+
+<!-- UPGRADE SHOP -->
+<div class="screen hidden" id="shopScreen">
+  <div class="shop-panel">
+    <div class="shop-header">
+      <div class="shop-title">SHIP UPGRADES</div>
+      <div class="shop-tokens">◆ <span id="shopTokens">0</span></div>
+    </div>
+    <div id="shopList"></div>
+    <div class="shop-hint">Earn tokens by selling ore, clearing debris, and completing waves.<br>Press U or ESC to close.</div>
+    <button class="start-btn" id="closeShopBtn" style="width:100%;margin-top:14px">CLOSE</button>
+  </div>
 </div>
 
 <!-- WAVE CLEAR SCREEN -->
@@ -131,8 +178,10 @@ body::before {
     <div class="stat-block"><div class="stat-val" id="totalScoreWave">1,250</div><div class="stat-lbl">TOTAL SCORE</div></div>
     <div class="stat-block"><div class="stat-val" id="waveTokens" style="color:var(--green);">+0</div><div class="stat-lbl">TOKENS ◆</div></div>
   </div>
+  <div id="waveDetail" class="tagline" style="color:var(--txt2);font-size:11px"></div>
   <div class="tagline" id="nextWaveMsg" style="color:var(--txt2)">Preparing Wave 2 deployment...</div>
   <button class="start-btn" id="nextWaveBtn">▶ NEXT WAVE</button>
+  <button class="start-btn" style="border-color:var(--gold);color:var(--gold);margin-top:4px" id="shopBtn">◆ UPGRADES</button>
 </div>
 
 <!-- GAME OVER SCREEN -->
@@ -144,9 +193,10 @@ body::before {
   <div class="stat-row" style="margin-top:8px">
     <div class="stat-block"><div class="stat-val" id="finalWave">1</div><div class="stat-lbl">WAVES CLEARED</div></div>
     <div class="stat-block"><div class="stat-val" id="finalDebris">0</div><div class="stat-lbl">DEBRIS CLEARED</div></div>
-    <div class="stat-block"><div class="stat-val" id="finalOre">0 kg</div><div class="stat-lbl">ORE MINED</div></div>
+    <div class="stat-block"><div class="stat-val" id="finalOre">0 kg</div><div class="stat-lbl">ORE SOLD</div></div>
     <div class="stat-block"><div class="stat-val" id="finalTokens" style="color:var(--green);">0</div><div class="stat-lbl">TOKENS ◆</div></div>
   </div>
+  <div id="finalExtra" class="tagline" style="color:var(--txt2);font-size:11px;margin-top:4px"></div>
   <button class="start-btn" id="restartBtn" style="margin-top:8px">↺ RESTART MISSION</button>
 </div>
 
@@ -159,7 +209,6 @@ body::before {
 <script type="module">
 import('./three-renderer.js')
   .then(mod => {
-    // Attach the exported renderer function to window so non-module code can call it
     window.renderThree = mod.renderThree || mod.default || null;
     console.log('three-renderer loaded');
   })
