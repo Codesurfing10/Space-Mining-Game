@@ -94,6 +94,7 @@ body::before {
   <div style="font-size:clamp(9px,1vw,11px);color:var(--txt2);letter-spacing:.25em">AUTONOMOUS REMEDIATION &amp; INTERCEPTION ARCHITECTURE</div>
   <h1>A·R·I·A</h1>
   <div class="sub">SPACE MINING &amp; DEBRIS CLEANUP · v4.3.1 (Enhanced Graphics)</div>
+  <div class="sub">SPACE MINING &amp; DEBRIS CLEANUP · v5.0 — Improved 3D Gameplay</div>
   <div class="tagline">
     Low-Earth orbit is a war zone of dead satellites and rocket bodies.<br>
     You are the A·R·I·A spacecraft — the last line of defense.<br>
@@ -157,11 +158,6 @@ body::before {
 
 <!-- Load three-renderer dynamically; if it fails the 2D game will still run -->
 <script type="module">
-import('./three-renderer.js').then(() => {
-  console.log('three-renderer loaded');
-}).catch(err => {
-  console.warn('three-renderer failed to load — continuing with 2D only', err);
-});
 import('./three-renderer.js')
   .then(mod => {
     // Attach the exported renderer function to window so non-module code can call it
