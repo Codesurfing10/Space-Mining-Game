@@ -28,7 +28,15 @@ Then open the local URL and click **LAUNCH MISSION**.
 | **Shift** | Emergency brake |
 | **Esc** | Pause / close shop |
 
-## Features (v5.1 — ship systems)
+## Features (v5.2 — dynamic ops)
+
+### Dashboard & payments
+- Live top dashboard (score, tokens, wave, ore, combo)
+- Side action rail: upgrades · Stripe packs · wallet · mission dashboard
+- **Wallet connect** via `window.ethereum` (MetaMask etc.) + optional balance/auth APIs
+- **Stripe token packs** (demo grants by default; Payment Link or Checkout API when configured)
+
+### Ship systems
 
 ### Ship systems
 - **Fuel** — burns while thrusting, mining, and firing. Empty tank = weak thrust only. Dock to refuel.

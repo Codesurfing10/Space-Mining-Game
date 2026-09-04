@@ -13,18 +13,21 @@
   --gold:   #ffc846;
   --red:    #ff4060;
   --purple: #b06aff;
-  --txt:    rgba(180,230,255,.9);
-  --txt2:   rgba(120,190,220,.6);
-  --line:   rgba(0,200,255,.18);
+  --blue:   #4488ff;
+  --txt:    rgba(180,230,255,.92);
+  --txt2:   rgba(120,190,220,.65);
+  --line:   rgba(0,200,255,.22);
+  --panel:  rgba(2,20,40,.88);
   --fnt:    'Courier New', monospace;
+  --glow:   0 0 20px rgba(0,200,255,.35);
 }
 html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); font-family:var(--fnt); }
 canvas { display:block; }
 body::before {
   content:''; position:fixed; inset:0; pointer-events:none; z-index:9999;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.06) 2px,rgba(0,0,0,.06) 4px);
 }
-.corner { position:fixed; width:22px; height:22px; z-index:100; border-color:var(--cyan); border-style:solid; }
+.corner { position:fixed; width:22px; height:22px; z-index:100; border-color:var(--cyan); border-style:solid; pointer-events:none; }
 .corner.tl { top:6px; left:6px;   border-width:2px 0 0 2px; }
 .corner.tr { top:6px; right:6px;  border-width:2px 2px 0 0; }
 .corner.bl { bottom:6px; left:6px;  border-width:0 0 2px 2px; }
@@ -34,7 +37,7 @@ body::before {
 .screen {
   position:fixed; inset:0; z-index:200;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:16px; background:rgba(2,13,24,.92);
+  gap:16px; background:rgba(2,13,24,.93);
   font-family:var(--fnt);
 }
 .screen.hidden { display:none; }
@@ -57,7 +60,7 @@ body::before {
   font-family:var(--fnt); font-size:clamp(11px,1.4vw,14px); letter-spacing:.2em; cursor:pointer;
   transition:all .2s;
 }
-.start-btn:hover { background:rgba(0,200,255,.12); box-shadow:0 0 18px rgba(0,200,255,.3); }
+.start-btn:hover { background:rgba(0,200,255,.12); box-shadow:var(--glow); }
 .score-big { font-size:clamp(22px,3vw,42px); color:var(--gold); letter-spacing:.1em; }
 .score-label { font-size:clamp(10px,1.2vw,13px); color:var(--txt2); letter-spacing:.15em; }
 .stat-row { display:flex; gap:40px; justify-content:center; flex-wrap:wrap; }
@@ -78,121 +81,315 @@ body::before {
 @keyframes slideIn { from { transform:translateX(400px); opacity:0; } to { transform:translateX(0); opacity:1; } }
 .achievement-title { font-weight:bold; color:var(--gold); letter-spacing:.05em; margin-bottom:4px; }
 .achievement-reward { color:var(--green); font-size:11px; margin-top:4px; }
-.crypto-badge { color:#00ff88; font-weight:bold; }
 
-/* ── UPGRADE SHOP ── */
-#shopScreen {
-  justify-content:flex-start;
-  padding-top:clamp(40px,8vh,80px);
-  overflow-y:auto;
+/* ── LIVE DASHBOARD (HTML overlay) ── */
+#liveDash {
+  position:fixed; top:12px; left:50%; transform:translateX(-50%);
+  z-index:50; display:none; pointer-events:none;
+  gap:10px; align-items:stretch;
 }
-.shop-panel {
-  width:min(520px,92vw);
-  background:rgba(0,30,50,.85);
-  border:1px solid var(--line);
-  border-radius:6px;
-  padding:20px 22px;
+#liveDash.on { display:flex; }
+.dash-chip {
+  pointer-events:auto;
+  background:var(--panel); border:1px solid var(--line); border-radius:6px;
+  padding:8px 14px; min-width:88px; text-align:center;
+  box-shadow:var(--glow); backdrop-filter:blur(8px);
 }
-.shop-header {
-  display:flex; justify-content:space-between; align-items:baseline;
-  margin-bottom:14px; border-bottom:1px solid var(--line); padding-bottom:10px;
+.dash-chip .lbl { font-size:9px; color:var(--txt2); letter-spacing:.14em; margin-bottom:2px; }
+.dash-chip .val { font-size:15px; color:var(--cyan); letter-spacing:.04em; }
+.dash-chip .val.gold { color:var(--gold); }
+.dash-chip .val.green { color:var(--green); }
+.dash-chip .val.red { color:var(--red); }
+
+/* Side action rail */
+#actionRail {
+  position:fixed; top:50%; right:12px; transform:translateY(-50%);
+  z-index:50; display:none; flex-direction:column; gap:8px;
 }
-.shop-title { color:var(--cyan); letter-spacing:.2em; font-size:16px; }
-.shop-tokens { color:var(--green); font-size:15px; }
-.shop-row {
+#actionRail.on { display:flex; }
+.rail-btn {
+  width:48px; height:48px; border-radius:8px;
+  background:var(--panel); border:1px solid var(--line);
+  color:var(--cyan); font-size:18px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s; box-shadow:var(--glow);
+}
+.rail-btn:hover { background:rgba(0,200,255,.15); border-color:var(--cyan); }
+.rail-btn.gold { color:var(--gold); border-color:rgba(255,200,70,.4); }
+.rail-btn.green { color:var(--green); border-color:rgba(0,229,160,.4); }
+.rail-btn.purple { color:var(--purple); border-color:rgba(176,106,255,.4); }
+
+/* Wallet status pill */
+#walletPill {
+  position:fixed; top:12px; right:12px; z-index:55;
+  display:none; align-items:center; gap:8px;
+  background:var(--panel); border:1px solid var(--line); border-radius:20px;
+  padding:6px 12px 6px 8px; font-size:11px; color:var(--txt2);
+  cursor:pointer; box-shadow:var(--glow);
+}
+#walletPill.on { display:flex; }
+#walletPill .dot {
+  width:8px; height:8px; border-radius:50%; background:#555;
+}
+#walletPill.connected .dot { background:var(--green); box-shadow:0 0 8px var(--green); }
+#walletPill.connected { color:var(--green); border-color:rgba(0,229,160,.4); }
+
+/* ── PANELS (shop / wallet / stripe) ── */
+.panel-screen {
+  position:fixed; inset:0; z-index:220;
+  display:flex; align-items:flex-start; justify-content:center;
+  padding:clamp(24px,6vh,60px) 12px; overflow-y:auto;
+  background:rgba(2,13,24,.92);
+}
+.panel-screen.hidden { display:none; }
+.panel {
+  width:min(560px,96vw);
+  background:linear-gradient(160deg, rgba(4,28,48,.95), rgba(2,16,32,.98));
+  border:1px solid var(--line); border-radius:10px;
+  padding:22px 24px; box-shadow:0 0 40px rgba(0,200,255,.12);
+}
+.panel-header {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--line);
+}
+.panel-title { color:var(--cyan); letter-spacing:.22em; font-size:15px; }
+.panel-sub { color:var(--txt2); font-size:11px; margin-top:4px; letter-spacing:.06em; }
+.panel-close {
+  background:transparent; border:1px solid var(--line); color:var(--txt2);
+  width:32px; height:32px; border-radius:6px; cursor:pointer; font-size:16px;
+}
+.panel-close:hover { border-color:var(--cyan); color:var(--cyan); }
+
+.shop-row, .pack-row, .wallet-row {
   display:flex; align-items:center; justify-content:space-between;
-  gap:12px; padding:10px 0; border-bottom:1px solid rgba(0,200,255,.08);
+  gap:12px; padding:12px 0; border-bottom:1px solid rgba(0,200,255,.08);
 }
-.shop-name { color:var(--txt); font-size:13px; letter-spacing:.06em; }
-.shop-meta { color:var(--txt2); font-size:11px; margin-top:2px; }
-.shop-buy {
-  min-width:72px; padding:6px 12px;
+.shop-name, .pack-name { color:var(--txt); font-size:13px; letter-spacing:.05em; }
+.shop-meta, .pack-meta { color:var(--txt2); font-size:11px; margin-top:3px; }
+.buy-btn {
+  min-width:78px; padding:7px 14px;
   background:transparent; border:1px solid var(--gold); color:var(--gold);
-  font-family:var(--fnt); font-size:12px; cursor:pointer; letter-spacing:.08em;
+  font-family:var(--fnt); font-size:12px; cursor:pointer; letter-spacing:.08em; border-radius:4px;
 }
-.shop-buy:hover:not(:disabled) { background:rgba(255,200,70,.15); }
-.shop-buy:disabled { opacity:.4; cursor:default; border-color:var(--txt2); color:var(--txt2); }
-.shop-hint { margin-top:12px; font-size:11px; color:var(--txt2); text-align:center; letter-spacing:.06em; }
+.buy-btn:hover:not(:disabled) { background:rgba(255,200,70,.12); }
+.buy-btn:disabled { opacity:.4; cursor:default; border-color:var(--txt2); color:var(--txt2); }
+.buy-btn.stripe { border-color:#635bff; color:#a5a0ff; }
+.buy-btn.stripe:hover:not(:disabled) { background:rgba(99,91,255,.15); }
+.buy-btn.wallet { border-color:var(--purple); color:var(--purple); }
+
+.hint { margin-top:14px; font-size:11px; color:var(--txt2); text-align:center; line-height:1.6; letter-spacing:.04em; }
+.tabs { display:flex; gap:6px; margin-bottom:14px; }
+.tab {
+  flex:1; padding:8px; text-align:center; cursor:pointer;
+  border:1px solid var(--line); background:transparent; color:var(--txt2);
+  font-family:var(--fnt); font-size:11px; letter-spacing:.1em; border-radius:4px;
+}
+.tab.active { border-color:var(--cyan); color:var(--cyan); background:rgba(0,200,255,.08); }
+
+.wallet-addr {
+  font-size:11px; color:var(--green); word-break:break-all;
+  background:rgba(0,229,160,.06); border:1px solid rgba(0,229,160,.2);
+  padding:8px 10px; border-radius:4px; margin:8px 0;
+}
+.api-box {
+  margin-top:12px; padding:10px 12px;
+  background:rgba(0,0,0,.35); border:1px dashed var(--line); border-radius:6px;
+  font-size:10px; color:var(--txt2); line-height:1.7;
+}
+.api-box code { color:var(--cyan); }
+.status-ok { color:var(--green); }
+.status-warn { color:var(--gold); }
+.status-err { color:var(--red); }
+
+/* Bar polish for canvas-adjacent labels */
+.glow-text { text-shadow:0 0 10px currentColor; }
 </style>
 </head>
 <body>
 
-<!-- Corner brackets -->
 <div class="corner tl"></div>
 <div class="corner tr"></div>
 <div class="corner bl"></div>
 <div class="corner br"></div>
 
-<!-- TITLE SCREEN -->
+<!-- LIVE DASHBOARD -->
+<div id="liveDash">
+  <div class="dash-chip"><div class="lbl">SCORE</div><div class="val gold" id="dashScore">0</div></div>
+  <div class="dash-chip"><div class="lbl">TOKENS ◆</div><div class="val green" id="dashTokens">0</div></div>
+  <div class="dash-chip"><div class="lbl">WAVE</div><div class="val" id="dashWave">1</div></div>
+  <div class="dash-chip"><div class="lbl">ORE</div><div class="val gold" id="dashOre">0 kg</div></div>
+  <div class="dash-chip"><div class="lbl">COMBO</div><div class="val" id="dashCombo">—</div></div>
+</div>
+
+<!-- WALLET PILL -->
+<div id="walletPill" title="Wallet & payments">
+  <span class="dot"></span>
+  <span id="walletPillText">WALLET</span>
+</div>
+
+<!-- ACTION RAIL -->
+<div id="actionRail">
+  <button class="rail-btn" id="railShop" title="Upgrades (U)">◆</button>
+  <button class="rail-btn gold" id="railBuy" title="Buy tokens (Stripe)">$</button>
+  <button class="rail-btn purple" id="railWallet" title="Connect wallet">◈</button>
+  <button class="rail-btn green" id="railDash" title="Mission dashboard">▣</button>
+</div>
+
+<!-- TITLE -->
 <div class="screen" id="titleScreen">
   <div style="font-size:clamp(9px,1vw,11px);color:var(--txt2);letter-spacing:.25em">AUTONOMOUS REMEDIATION &amp; INTERCEPTION ARCHITECTURE</div>
   <h1>A·R·I·A</h1>
-  <div class="sub">SPACE MINING &amp; DEBRIS CLEANUP · v5.1 — Ship Systems &amp; Upgrades</div>
+  <div class="sub">SPACE MINING &amp; DEBRIS CLEANUP · v5.2 — Dynamic Ops</div>
   <div class="tagline">
-    Low-Earth orbit is a war zone of dead satellites and rocket bodies.<br>
-    Mine asteroids, manage fuel &amp; shields, fill cargo, dock to sell, upgrade your ship.
+    Mine asteroids. Manage fuel &amp; shields. Sell ore for tokens.<br>
+    Upgrade your ship · Connect a wallet · Top up with Stripe.
   </div>
   <div class="controls-grid">
-    <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span class="ctrl-act">Thrust (uses fuel)</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">LEFT CLICK</span><span class="ctrl-act">Fire laser</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">SHIFT</span><span class="ctrl-act">Emergency brake</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">RIGHT CLICK</span><span class="ctrl-act">Capture net</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">E</span><span class="ctrl-act">Mine asteroid (hold)</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">R</span><span class="ctrl-act">Dock at base</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">U</span><span class="ctrl-act">Upgrade shop</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span class="ctrl-act">Thrust (fuel)</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">CLICK</span><span class="ctrl-act">Laser / Net</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">E</span><span class="ctrl-act">Mine</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">R</span><span class="ctrl-act">Dock / sell</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">U</span><span class="ctrl-act">Upgrades</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">B</span><span class="ctrl-act">Buy tokens</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">W</span><span class="ctrl-act">Wallet*</span></div>
     <div class="ctrl-row"><span class="ctrl-key">ESC</span><span class="ctrl-act">Pause</span></div>
   </div>
   <button class="start-btn" id="startBtn">▶ LAUNCH MISSION</button>
-  <div style="font-size:10px;color:var(--txt2);letter-spacing:.1em;margin-top:4px">Fuel · Shield · Cargo · Upgrades · Improved radar</div>
+  <div style="font-size:10px;color:var(--txt2);letter-spacing:.1em;margin-top:4px">* Wallet key is also the purple rail button · Stripe packs · Live dashboard</div>
 </div>
 
-<!-- PAUSE SCREEN -->
+<!-- PAUSE -->
 <div class="screen hidden" id="pauseScreen">
   <h1 style="font-size:clamp(20px,3vw,36px)">MISSION PAUSED</h1>
-  <div class="tagline" style="color:var(--txt2)">Press ESC or click to resume</div>
+  <div class="tagline" style="color:var(--txt2)">ESC or Resume to continue</div>
   <button class="start-btn" id="resumeBtn">▶ RESUME</button>
-  <button class="start-btn" style="border-color:var(--gold);color:var(--gold);margin-top:4px" id="shopFromPauseBtn">◆ UPGRADE SHOP</button>
-  <button class="start-btn" style="border-color:var(--red);color:var(--red);margin-top:4px" id="restartFromPauseBtn">↺ RESTART</button>
+  <button class="start-btn" style="border-color:var(--gold);color:var(--gold)" id="shopFromPauseBtn">◆ UPGRADES</button>
+  <button class="start-btn" style="border-color:#635bff;color:#a5a0ff" id="buyFromPauseBtn">$ BUY TOKENS</button>
+  <button class="start-btn" style="border-color:var(--purple);color:var(--purple)" id="walletFromPauseBtn">◈ WALLET</button>
+  <button class="start-btn" style="border-color:var(--red);color:var(--red)" id="restartFromPauseBtn">↺ RESTART</button>
 </div>
 
 <!-- UPGRADE SHOP -->
-<div class="screen hidden" id="shopScreen">
-  <div class="shop-panel">
-    <div class="shop-header">
-      <div class="shop-title">SHIP UPGRADES</div>
-      <div class="shop-tokens">◆ <span id="shopTokens">0</span></div>
+<div class="panel-screen hidden" id="shopScreen">
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">SHIP UPGRADES</div>
+        <div class="panel-sub">Spend mission tokens ◆</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="color:var(--green);font-size:14px">◆ <span id="shopTokens">0</span></div>
+        <button class="panel-close" id="closeShopBtn">✕</button>
+      </div>
     </div>
     <div id="shopList"></div>
-    <div class="shop-hint">Earn tokens by selling ore, clearing debris, and completing waves.<br>Press U or ESC to close.</div>
-    <button class="start-btn" id="closeShopBtn" style="width:100%;margin-top:14px">CLOSE</button>
+    <div class="hint">Earn tokens by selling ore, clearing threats, and wave bonuses.</div>
   </div>
 </div>
 
-<!-- WAVE CLEAR SCREEN -->
+<!-- STRIPE / BUY TOKENS -->
+<div class="panel-screen hidden" id="buyScreen">
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">TOKEN PACKS</div>
+        <div class="panel-sub">Stripe Checkout · demo mode until keys are set</div>
+      </div>
+      <button class="panel-close" id="closeBuyBtn">✕</button>
+    </div>
+    <div id="packList"></div>
+    <div class="api-box">
+      <strong style="color:var(--cyan)">Stripe setup</strong><br>
+      Set <code>CFG.payments.stripePublishableKey</code> and pack <code>priceId</code> / <code>paymentLink</code> in <code>game.js</code>.<br>
+      Preferred: Stripe Payment Links or Checkout Session via your backend<br>
+      <code>CFG.payments.checkoutApiUrl</code> → POST { packId, wallet? } → { url }
+    </div>
+    <div class="hint" id="stripeStatus">Status: demo grants (no charge)</div>
+  </div>
+</div>
+
+<!-- WALLET -->
+<div class="panel-screen hidden" id="walletScreen">
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">WALLET LINK</div>
+        <div class="panel-sub">Browser wallet · optional chain API</div>
+      </div>
+      <button class="panel-close" id="closeWalletBtn">✕</button>
+    </div>
+    <div class="wallet-row">
+      <div>
+        <div class="shop-name">Connection</div>
+        <div class="shop-meta" id="walletStatusText">Not connected</div>
+      </div>
+      <button class="buy-btn wallet" id="connectWalletBtn">CONNECT</button>
+    </div>
+    <div id="walletAddressBox" class="wallet-addr hidden"></div>
+    <div class="wallet-row">
+      <div>
+        <div class="shop-name">Sync balance (API)</div>
+        <div class="shop-meta">Pull on-chain or server token balance</div>
+      </div>
+      <button class="buy-btn wallet" id="syncWalletBtn" disabled>SYNC</button>
+    </div>
+    <div class="api-box">
+      <strong style="color:var(--purple)">Wallet APIs</strong><br>
+      Injected: <code>window.ethereum</code> (MetaMask / Rabby / Coinbase)<br>
+      Optional REST:<br>
+      <code>CFG.wallet.balanceApiUrl</code> → GET ?address= → { tokens }<br>
+      <code>CFG.wallet.authApiUrl</code> → POST { address, signature } → session<br>
+      Chain id target: <code>CFG.wallet.chainId</code> (default 1 / mainnet, or 11155111 Sepolia)
+    </div>
+    <div class="hint" id="walletHint">Connect to link rewards to an address. Game tokens still work offline.</div>
+  </div>
+</div>
+
+<!-- MISSION DASHBOARD -->
+<div class="panel-screen hidden" id="missionDashScreen">
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">MISSION DASHBOARD</div>
+        <div class="panel-sub">Live systems · economy · session</div>
+      </div>
+      <button class="panel-close" id="closeMissionDashBtn">✕</button>
+    </div>
+    <div class="stat-row" style="gap:20px;margin-bottom:12px">
+      <div class="stat-block"><div class="stat-val" id="mdScore">0</div><div class="stat-lbl">SCORE</div></div>
+      <div class="stat-block"><div class="stat-val" id="mdTokens" style="color:var(--green)">0</div><div class="stat-lbl">TOKENS</div></div>
+      <div class="stat-block"><div class="stat-val" id="mdOre">0</div><div class="stat-lbl">ORE KG</div></div>
+      <div class="stat-block"><div class="stat-val" id="mdDebris">0</div><div class="stat-lbl">DEBRIS</div></div>
+    </div>
+    <div id="mdSystems" style="font-size:12px;color:var(--txt);line-height:1.9;letter-spacing:.04em"></div>
+    <div class="api-box" id="mdWalletLine">Wallet: not linked</div>
+  </div>
+</div>
+
+<!-- WAVE CLEAR -->
 <div class="screen hidden" id="waveClearScreen">
   <div style="font-size:clamp(10px,1.2vw,13px);color:var(--green);letter-spacing:.2em">LEVEL CLEARED</div>
   <h1 id="waveClearTitle" style="font-size:clamp(22px,3.5vw,44px)">LEVEL 1 COMPLETE</h1>
-  <div id="waveClearSubtitle" style="font-size:clamp(9px,1.1vw,12px);color:var(--cyan);letter-spacing:.15em;margin-top:-10px"></div>
   <div class="stat-row">
     <div class="stat-block"><div class="stat-val" id="waveBonus">+500</div><div class="stat-lbl">WAVE BONUS</div></div>
     <div class="stat-block"><div class="stat-val" id="totalScoreWave">1,250</div><div class="stat-lbl">TOTAL SCORE</div></div>
     <div class="stat-block"><div class="stat-val" id="waveTokens" style="color:var(--green);">+0</div><div class="stat-lbl">TOKENS ◆</div></div>
   </div>
   <div id="waveDetail" class="tagline" style="color:var(--txt2);font-size:11px"></div>
-  <div class="tagline" id="nextWaveMsg" style="color:var(--txt2)">Preparing Wave 2 deployment...</div>
+  <div class="tagline" id="nextWaveMsg" style="color:var(--txt2)">Preparing next wave...</div>
   <button class="start-btn" id="nextWaveBtn">▶ NEXT WAVE</button>
-  <button class="start-btn" style="border-color:var(--gold);color:var(--gold);margin-top:4px" id="shopBtn">◆ UPGRADES</button>
+  <button class="start-btn" style="border-color:var(--gold);color:var(--gold)" id="shopBtn">◆ UPGRADES</button>
 </div>
 
-<!-- GAME OVER SCREEN -->
+<!-- GAME OVER -->
 <div class="screen hidden" id="gameOverScreen">
   <div style="font-size:clamp(10px,1.2vw,13px);color:var(--red);letter-spacing:.2em">⚠ MISSION FAILED — HULL BREACH</div>
   <h1 style="color:var(--red);font-size:clamp(22px,3.5vw,44px)">A·R·I·A DESTROYED</h1>
   <div class="score-label">FINAL SCORE</div>
   <div class="score-big" id="finalScore">0</div>
   <div class="stat-row" style="margin-top:8px">
-    <div class="stat-block"><div class="stat-val" id="finalWave">1</div><div class="stat-lbl">WAVES CLEARED</div></div>
-    <div class="stat-block"><div class="stat-val" id="finalDebris">0</div><div class="stat-lbl">DEBRIS CLEARED</div></div>
+    <div class="stat-block"><div class="stat-val" id="finalWave">1</div><div class="stat-lbl">WAVES</div></div>
+    <div class="stat-block"><div class="stat-val" id="finalDebris">0</div><div class="stat-lbl">DEBRIS</div></div>
     <div class="stat-block"><div class="stat-val" id="finalOre">0 kg</div><div class="stat-lbl">ORE SOLD</div></div>
     <div class="stat-block"><div class="stat-val" id="finalTokens" style="color:var(--green);">0</div><div class="stat-lbl">TOKENS ◆</div></div>
   </div>
@@ -200,12 +397,9 @@ body::before {
   <button class="start-btn" id="restartBtn" style="margin-top:8px">↺ RESTART MISSION</button>
 </div>
 
-<!-- THREE.JS CONTAINER (3D scene sits behind 2D canvas) -->
 <div id="threeContainer" style="position:absolute; inset:0; z-index:0; pointer-events:none;"></div>
-
 <canvas id="gameCanvas" style="position:absolute; inset:0; z-index:1;"></canvas>
 
-<!-- Load three-renderer dynamically; if it fails the 2D game will still run -->
 <script type="module">
 import('./three-renderer.js')
   .then(mod => {
@@ -213,7 +407,7 @@ import('./three-renderer.js')
     console.log('three-renderer loaded');
   })
   .catch(err => {
-    console.warn('three-renderer failed to load — continuing with 2D only', err);
+    console.warn('three-renderer failed — 2D only', err);
   });
 </script>
 <script src="game.js"></script>

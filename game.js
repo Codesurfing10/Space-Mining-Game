@@ -1,6 +1,6 @@
 /**
  * A·R·I·A — Space Mining & Debris Cleanup
- * feat/ship-base-upgrades-radar — ship systems, upgrades, cargo, shield, fuel, radar
+ * v5.2 — ship systems, upgrades, live dashboard, wallet + Stripe hooks
  */
 
 (() => {
@@ -23,27 +23,44 @@
       netRange: 160,
       netRadius: 55,
       mineRange: 90,
-      mineRate: 18,          // base ore kg/s
-      // New systems
+      mineRate: 18,
       maxFuel: 100,
-      fuelBurnThrust: 9,     // fuel / second while thrusting
-      fuelBurnMine: 4,       // fuel / second while mining
+      fuelBurnThrust: 9,
+      fuelBurnMine: 4,
       maxShield: 50,
-      shieldRegen: 4.5,      // /s when not recently hit
+      shieldRegen: 4.5,
       shieldRegenDelay: 2.2,
-      cargoCap: 50,          // kg
-      oreSellScore: 4,       // score per kg at dock
-      oreSellTokenDiv: 8     // tokens = floor(ore / this)
+      cargoCap: 50,
+      oreSellScore: 4,
+      oreSellTokenDiv: 8
     },
-    // Upgrade definitions (level 0 = base, costs are for next level)
     upgrades: {
-      miningSpeed:  { name: 'Mining Arm',   max: 5, costBase: 12, costScale: 1.55, perLevel: 0.22 }, // +22% rate
+      miningSpeed:  { name: 'Mining Arm',   max: 5, costBase: 12, costScale: 1.55, perLevel: 0.22 },
       laserDamage:  { name: 'Laser Power',  max: 5, costBase: 15, costScale: 1.6,  perLevel: 0.18 },
       netRadius:    { name: 'Net Radius',   max: 4, costBase: 10, costScale: 1.5,  perLevel: 0.25 },
-      enginePower:  { name: 'Engine',       max: 5, costBase: 14, costScale: 1.55, perLevel: 0.12 }, // +12% accel/speed
-      cargoCap:     { name: 'Cargo Hold',   max: 6, costBase: 10, costScale: 1.45, perLevel: 18 },  // +18 kg
-      shieldMax:    { name: 'Shield Gen',   max: 4, costBase: 16, costScale: 1.6,  perLevel: 12 },  // +12 max
-      fuelTank:     { name: 'Fuel Tank',    max: 4, costBase: 12, costScale: 1.5,  perLevel: 20 }   // +20 max
+      enginePower:  { name: 'Engine',       max: 5, costBase: 14, costScale: 1.55, perLevel: 0.12 },
+      cargoCap:     { name: 'Cargo Hold',   max: 6, costBase: 10, costScale: 1.45, perLevel: 18 },
+      shieldMax:    { name: 'Shield Gen',   max: 4, costBase: 16, costScale: 1.6,  perLevel: 12 },
+      fuelTank:     { name: 'Fuel Tank',    max: 4, costBase: 12, costScale: 1.5,  perLevel: 20 }
+    },
+    // ── Wallet + payments (wire real endpoints / keys for production) ──
+    wallet: {
+      chainId: '0xaa36a7', // Sepolia testnet hex; use '0x1' for mainnet
+      chainName: 'Sepolia',
+      balanceApiUrl: '',    // e.g. 'https://api.yourgame.com/wallet/balance'
+      authApiUrl: '',       // e.g. 'https://api.yourgame.com/wallet/auth'
+      demoMode: true
+    },
+    payments: {
+      stripePublishableKey: '', // pk_test_... when ready
+      checkoutApiUrl: '',       // backend: POST { packId } -> { url }
+      demoMode: true,           // grants tokens locally without charge
+      packs: [
+        { id: 'starter',  name: 'Starter Pack',  tokens: 50,  priceUsd: 4.99,  paymentLink: '', priceId: '' },
+        { id: 'pilot',    name: 'Pilot Pack',    tokens: 150, priceUsd: 9.99,  paymentLink: '', priceId: '' },
+        { id: 'captain',  name: 'Captain Pack',  tokens: 400, priceUsd: 19.99, paymentLink: '', priceId: '' },
+        { id: 'fleet',    name: 'Fleet Pack',    tokens: 1000,priceUsd: 39.99, paymentLink: '', priceId: '' }
+      ]
     },
     waves: [
       { debris: 12, asteroids: 8, mines: 2, drones: 1, bonus: 400 },
@@ -110,7 +127,8 @@
     camera: { x: 0, y: 0, z: 500, shake: 0 },
     achievements: new Set(),
     combo: { count: 0, timer: 0 },
-    sessionStats: { oreSold: 0, damageBlocked: 0, upgradesBought: 0 },
+    sessionStats: { oreSold: 0, damageBlocked: 0, upgradesBought: 0, tokensBought: 0 },
+    wallet: { connected: false, address: null, chainId: null },
     t: 0
   };
   window.G = G;
@@ -160,6 +178,12 @@
   const waveClearScreen = document.getElementById('waveClearScreen');
   const gameOverScreen = document.getElementById('gameOverScreen');
   const shopScreen = document.getElementById('shopScreen');
+  const buyScreen = document.getElementById('buyScreen');
+  const walletScreen = document.getElementById('walletScreen');
+  const missionDashScreen = document.getElementById('missionDashScreen');
+  const liveDash = document.getElementById('liveDash');
+  const actionRail = document.getElementById('actionRail');
+  const walletPill = document.getElementById('walletPill');
 
   function resize() {
     canvas.width = window.innerWidth;
@@ -168,19 +192,34 @@
   window.addEventListener('resize', resize);
   resize();
 
+  function anyPanelOpen() {
+    return [shopScreen, buyScreen, walletScreen, missionDashScreen]
+      .some(el => el && !el.classList.contains('hidden'));
+  }
+
+  function closeAllPanels() {
+    shopScreen?.classList.add('hidden');
+    buyScreen?.classList.add('hidden');
+    walletScreen?.classList.add('hidden');
+    missionDashScreen?.classList.add('hidden');
+  }
+
   // ─── INPUT ────────────────────────────────────────────────────────────────
   window.addEventListener('keydown', e => {
     G.keys[e.code] = true;
-    if (e.code === 'Escape' && G.running) {
-      if (shopScreen && !shopScreen.classList.contains('hidden')) {
-        closeShop();
-      } else {
-        togglePause();
+    if (e.code === 'Escape') {
+      if (anyPanelOpen()) {
+        closeAllPanels();
+        if (G.running) G.paused = false;
+        return;
       }
+      if (G.running) togglePause();
     }
-    if (e.code === 'KeyR' && G.running && !G.paused) tryDock();
-    if (e.code === 'KeyE' && G.running && !G.paused) tryMine(true);
-    if (e.code === 'KeyU' && G.running && !G.paused) openShop();
+    if (!G.running || G.paused) return;
+    if (e.code === 'KeyR') tryDock();
+    if (e.code === 'KeyE') tryMine(true);
+    if (e.code === 'KeyU') openShop();
+    if (e.code === 'KeyB') openBuy();
   });
   window.addEventListener('keyup', e => { G.keys[e.code] = false; });
 
@@ -212,6 +251,33 @@
     pauseScreen?.classList.add('hidden');
     openShop();
   });
+  document.getElementById('buyFromPauseBtn')?.addEventListener('click', () => {
+    pauseScreen?.classList.add('hidden');
+    openBuy();
+  });
+  document.getElementById('walletFromPauseBtn')?.addEventListener('click', () => {
+    pauseScreen?.classList.add('hidden');
+    openWallet();
+  });
+  document.getElementById('closeBuyBtn')?.addEventListener('click', () => {
+    buyScreen?.classList.add('hidden');
+    if (G.running) G.paused = false;
+  });
+  document.getElementById('closeWalletBtn')?.addEventListener('click', () => {
+    walletScreen?.classList.add('hidden');
+    if (G.running) G.paused = false;
+  });
+  document.getElementById('closeMissionDashBtn')?.addEventListener('click', () => {
+    missionDashScreen?.classList.add('hidden');
+    if (G.running) G.paused = false;
+  });
+  document.getElementById('railShop')?.addEventListener('click', openShop);
+  document.getElementById('railBuy')?.addEventListener('click', openBuy);
+  document.getElementById('railWallet')?.addEventListener('click', openWallet);
+  document.getElementById('railDash')?.addEventListener('click', openMissionDash);
+  document.getElementById('walletPill')?.addEventListener('click', openWallet);
+  document.getElementById('connectWalletBtn')?.addEventListener('click', connectWallet);
+  document.getElementById('syncWalletBtn')?.addEventListener('click', syncWalletBalance);
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -1093,65 +1159,64 @@
   window.render = render;
 
   function drawBar(x, y, w, h, pct, color, label) {
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = 'rgba(0,30,50,0.9)';
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, w * clamp(pct, 0, 1), h);
+    const p = clamp(pct, 0, 1);
+    if (p > 0) {
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.fillRect(x, y, w * p, h);
+      ctx.shadowBlur = 0;
+    }
     ctx.strokeStyle = 'rgba(0,200,255,0.35)';
     ctx.strokeRect(x, y, w, h);
     if (label) {
-      ctx.fillStyle = 'rgba(180,230,255,0.75)';
+      ctx.fillStyle = 'rgba(180,230,255,0.8)';
       ctx.font = '10px Courier New';
       ctx.textAlign = 'left';
-      ctx.fillText(label, x, y - 3);
+      ctx.fillText(label, x, y - 4);
+      ctx.fillStyle = 'rgba(180,230,255,0.5)';
+      ctx.textAlign = 'right';
+      ctx.fillText(Math.round(p * 100) + '%', x + w, y - 4);
+      ctx.textAlign = 'left';
     }
   }
 
   function drawHUD() {
+    updateLiveDash();
     const pad = 14;
-    ctx.textAlign = 'left';
-    ctx.font = '12px Courier New';
 
-    // Top-left
-    ctx.fillStyle = 'rgba(0,200,255,0.85)';
-    ctx.fillText(`SCORE  ${G.score.toLocaleString()}`, pad, pad + 12);
-    ctx.fillStyle = 'rgba(0,229,160,0.9)';
-    ctx.fillText(`TOKENS ◆ ${G.tokens}`, pad, pad + 28);
-    ctx.fillStyle = 'rgba(255,200,70,0.85)';
-    ctx.fillText(`ORE  ${Math.floor(G.ore)} / ${Math.floor(maxCargo())} kg`, pad, pad + 44);
-    ctx.fillStyle = 'rgba(180,230,255,0.55)';
-    ctx.fillText(`WAVE  ${G.wave + 1} / ${CFG.waves.length}`, pad, pad + 60);
-    ctx.fillText(`DEBRIS  ${G.debrisCleared}`, pad, pad + 76);
-    if (G.combo.count > 1 && G.combo.timer > 0) {
-      ctx.fillStyle = '#ffc846';
-      ctx.fillText(`COMBO x${G.combo.count}`, pad, pad + 92);
-    }
-
-    // Bars bottom-left
-    const bw = 150, bh = 9;
-    let by = canvas.height - pad - 8;
+    // Bars only (score/tokens live in HTML dashboard)
+    const bw = 168, bh = 10;
+    let by = canvas.height - pad - 6;
     drawBar(pad, by - bh, bw, bh, G.hull / CFG.player.maxHull,
       G.hull > 40 ? '#00e5a0' : G.hull > 20 ? '#ffc846' : '#ff4060', 'HULL');
-    by -= 22;
-    drawBar(pad, by - bh, bw, bh, G.shield / maxShield(), '#44aaff', 'SHIELD');
-    by -= 22;
+    by -= 24;
+    drawBar(pad, by - bh, bw, bh, G.shield / maxShield(), '#4488ff', 'SHIELD');
+    by -= 24;
     drawBar(pad, by - bh, bw, bh, G.fuel / maxFuel(),
       G.fuel > 25 ? '#ffaa33' : '#ff4060', 'FUEL');
-    by -= 22;
+    by -= 24;
     drawBar(pad, by - bh, bw, bh, G.ore / maxCargo(), '#c0a060', 'CARGO');
 
-    // Cooldowns + tips top-right
-    const cx = canvas.width - pad - 110;
-    ctx.fillStyle = 'rgba(180,230,255,0.5)';
+    const cx = canvas.width - pad - 120;
+    ctx.font = '11px Courier New';
     ctx.textAlign = 'left';
-    ctx.fillText(`LASER ${G.cooldowns.laser > 0 ? G.cooldowns.laser.toFixed(1) + 's' : 'RDY'}`, cx, pad + 12);
-    ctx.fillText(`NET   ${G.cooldowns.net > 0 ? G.cooldowns.net.toFixed(1) + 's' : 'RDY'}`, cx, pad + 28);
+    ctx.fillStyle = G.cooldowns.laser > 0 ? 'rgba(180,230,255,0.45)' : 'rgba(0,200,255,0.85)';
+    ctx.fillText(`LASER ${G.cooldowns.laser > 0 ? G.cooldowns.laser.toFixed(1) + 's' : 'RDY'}`, cx, pad + 48);
+    ctx.fillStyle = G.cooldowns.net > 0 ? 'rgba(180,230,255,0.45)' : 'rgba(0,229,160,0.85)';
+    ctx.fillText(`NET   ${G.cooldowns.net > 0 ? G.cooldowns.net.toFixed(1) + 's' : 'RDY'}`, cx, pad + 64);
     if (G.miningTarget) {
       ctx.fillStyle = '#00e5a0';
-      ctx.fillText('MINING [E]', cx, pad + 44);
+      ctx.fillText('◉ MINING', cx, pad + 80);
     }
-    ctx.fillStyle = 'rgba(180,230,255,0.4)';
-    ctx.fillText('[U] SHOP', cx, pad + 60);
+    if (G.fuel < 15) {
+      ctx.fillStyle = '#ff4060';
+      ctx.fillText('LOW FUEL', cx, pad + 96);
+    }
 
     // Improved radar / minimap
     const mw = 140, mh = 140;
@@ -1235,6 +1300,263 @@
     }
   }
 
+  // ─── LIVE DASHBOARD ───────────────────────────────────────────────────────
+  function setHudChrome(on) {
+    liveDash?.classList.toggle('on', on);
+    actionRail?.classList.toggle('on', on);
+    walletPill?.classList.toggle('on', on);
+  }
+
+  function updateLiveDash() {
+    const el = (id) => document.getElementById(id);
+    if (el('dashScore')) el('dashScore').textContent = G.score.toLocaleString();
+    if (el('dashTokens')) el('dashTokens').textContent = G.tokens;
+    if (el('dashWave')) el('dashWave').textContent = `${G.wave + 1}`;
+    if (el('dashOre')) el('dashOre').textContent = `${Math.floor(G.ore)} kg`;
+    if (el('dashCombo')) {
+      el('dashCombo').textContent = (G.combo.count > 1 && G.combo.timer > 0) ? `x${G.combo.count}` : '—';
+    }
+  }
+
+  function updateWalletPill() {
+    if (!walletPill) return;
+    const text = document.getElementById('walletPillText');
+    if (G.wallet.connected && G.wallet.address) {
+      walletPill.classList.add('connected');
+      const a = G.wallet.address;
+      if (text) text.textContent = a.slice(0, 6) + '…' + a.slice(-4);
+    } else {
+      walletPill.classList.remove('connected');
+      if (text) text.textContent = 'WALLET';
+    }
+  }
+
+  // ─── WALLET ───────────────────────────────────────────────────────────────
+  async function connectWallet() {
+    const status = document.getElementById('walletStatusText');
+    const addrBox = document.getElementById('walletAddressBox');
+    const syncBtn = document.getElementById('syncWalletBtn');
+    const btn = document.getElementById('connectWalletBtn');
+
+    if (G.wallet.connected) {
+      G.wallet = { connected: false, address: null, chainId: null };
+      if (status) status.textContent = 'Disconnected';
+      if (addrBox) { addrBox.classList.add('hidden'); addrBox.textContent = ''; }
+      if (syncBtn) syncBtn.disabled = true;
+      if (btn) btn.textContent = 'CONNECT';
+      updateWalletPill();
+      return;
+    }
+
+    try {
+      const eth = window.ethereum;
+      if (!eth) {
+        if (CFG.wallet.demoMode) {
+          const demo = '0xDEMO' + Math.random().toString(16).slice(2, 10).padEnd(34, '0');
+          G.wallet = { connected: true, address: demo, chainId: CFG.wallet.chainId };
+          if (status) status.innerHTML = '<span class="status-warn">Demo wallet (no extension)</span>';
+          if (addrBox) { addrBox.classList.remove('hidden'); addrBox.textContent = demo; }
+          if (syncBtn) syncBtn.disabled = false;
+          if (btn) btn.textContent = 'DISCONNECT';
+          updateWalletPill();
+          showAchievement('WALLET LINKED', 'Demo address connected');
+          return;
+        }
+        if (status) status.innerHTML = '<span class="status-err">No wallet extension found</span>';
+        return;
+      }
+
+      if (btn) btn.textContent = '…';
+      const accounts = await eth.request({ method: 'eth_requestAccounts' });
+      const address = accounts[0];
+      let chainId = await eth.request({ method: 'eth_chainId' });
+      if (CFG.wallet.chainId && chainId !== CFG.wallet.chainId) {
+        try {
+          await eth.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: CFG.wallet.chainId }]
+          });
+          chainId = CFG.wallet.chainId;
+        } catch (_) { /* user may reject */ }
+      }
+      G.wallet = { connected: true, address, chainId };
+      if (status) status.innerHTML = '<span class="status-ok">Connected · ' + (CFG.wallet.chainName || chainId) + '</span>';
+      if (addrBox) { addrBox.classList.remove('hidden'); addrBox.textContent = address; }
+      if (syncBtn) syncBtn.disabled = false;
+      if (btn) btn.textContent = 'DISCONNECT';
+      updateWalletPill();
+      showAchievement('WALLET LINKED', 'Address connected');
+
+      // Optional SIWE-style auth hook
+      if (CFG.wallet.authApiUrl) {
+        try {
+          await fetch(CFG.wallet.authApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address, chainId })
+          });
+        } catch (err) {
+          console.warn('wallet auth API', err);
+        }
+      }
+    } catch (err) {
+      console.warn('connectWallet', err);
+      if (status) status.innerHTML = '<span class="status-err">Connection failed</span>';
+      if (btn) btn.textContent = 'CONNECT';
+    }
+  }
+
+  async function syncWalletBalance() {
+    const hint = document.getElementById('walletHint');
+    if (!G.wallet.address) return;
+    if (!CFG.wallet.balanceApiUrl) {
+      if (hint) hint.textContent = 'No balanceApiUrl configured — tokens remain local.';
+      return;
+    }
+    try {
+      const url = CFG.wallet.balanceApiUrl + (CFG.wallet.balanceApiUrl.includes('?') ? '&' : '?') +
+        'address=' + encodeURIComponent(G.wallet.address);
+      const res = await fetch(url);
+      const data = await res.json();
+      if (typeof data.tokens === 'number') {
+        G.tokens = Math.max(G.tokens, Math.floor(data.tokens));
+        if (hint) hint.innerHTML = '<span class="status-ok">Synced · balance applied</span>';
+        updateLiveDash();
+      }
+    } catch (err) {
+      if (hint) hint.innerHTML = '<span class="status-err">Sync failed</span>';
+      console.warn('syncWallet', err);
+    }
+  }
+
+  function openWallet() {
+    closeAllPanels();
+    pauseScreen?.classList.add('hidden');
+    if (G.running) G.paused = true;
+    walletScreen?.classList.remove('hidden');
+    const status = document.getElementById('walletStatusText');
+    const addrBox = document.getElementById('walletAddressBox');
+    const btn = document.getElementById('connectWalletBtn');
+    const syncBtn = document.getElementById('syncWalletBtn');
+    if (G.wallet.connected) {
+      if (status) status.innerHTML = '<span class="status-ok">Connected</span>';
+      if (addrBox) { addrBox.classList.remove('hidden'); addrBox.textContent = G.wallet.address; }
+      if (btn) btn.textContent = 'DISCONNECT';
+      if (syncBtn) syncBtn.disabled = false;
+    } else {
+      if (status) status.textContent = 'Not connected';
+      if (addrBox) addrBox.classList.add('hidden');
+      if (btn) btn.textContent = 'CONNECT';
+      if (syncBtn) syncBtn.disabled = true;
+    }
+  }
+
+  // ─── STRIPE / TOKEN PACKS ─────────────────────────────────────────────────
+  function renderPackList() {
+    const list = document.getElementById('packList');
+    if (!list) return;
+    list.innerHTML = '';
+    for (const pack of CFG.payments.packs) {
+      const row = document.createElement('div');
+      row.className = 'pack-row';
+      row.innerHTML = `
+        <div>
+          <div class="pack-name">${pack.name}</div>
+          <div class="pack-meta">+${pack.tokens} ◆ · $${pack.priceUsd.toFixed(2)}</div>
+        </div>
+        <button class="buy-btn stripe" data-pack="${pack.id}">BUY</button>`;
+      list.appendChild(row);
+    }
+    list.querySelectorAll('.buy-btn').forEach(btn => {
+      btn.addEventListener('click', () => purchasePack(btn.getAttribute('data-pack')));
+    });
+    const st = document.getElementById('stripeStatus');
+    if (st) {
+      if (CFG.payments.demoMode) st.innerHTML = 'Status: <span class="status-warn">demo mode — packs grant tokens, no charge</span>';
+      else if (CFG.payments.checkoutApiUrl || CFG.payments.packs.some(p => p.paymentLink))
+        st.innerHTML = 'Status: <span class="status-ok">live checkout configured</span>';
+      else st.innerHTML = 'Status: <span class="status-err">set paymentLink or checkoutApiUrl</span>';
+    }
+  }
+
+  async function purchasePack(packId) {
+    const pack = CFG.payments.packs.find(p => p.id === packId);
+    if (!pack) return;
+
+    // 1) Prefer backend Checkout Session
+    if (CFG.payments.checkoutApiUrl && !CFG.payments.demoMode) {
+      try {
+        const res = await fetch(CFG.payments.checkoutApiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            packId: pack.id,
+            priceId: pack.priceId,
+            wallet: G.wallet.address || null
+          })
+        });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+          return;
+        }
+      } catch (err) {
+        console.warn('checkout API', err);
+      }
+    }
+
+    // 2) Stripe Payment Link
+    if (pack.paymentLink && !CFG.payments.demoMode) {
+      window.open(pack.paymentLink, '_blank', 'noopener');
+      return;
+    }
+
+    // 3) Demo grant
+    G.tokens += pack.tokens;
+    G.sessionStats.tokensBought += pack.tokens;
+    floatText(G.player.x, G.player.y - 40, `+${pack.tokens} ◆`, '#00e5a0');
+    showAchievement('TOKEN PACK', `${pack.name} credited`);
+    updateLiveDash();
+    const st = document.getElementById('stripeStatus');
+    if (st) st.innerHTML = `<span class="status-ok">Demo: +${pack.tokens} tokens added</span>`;
+  }
+
+  function openBuy() {
+    closeAllPanels();
+    pauseScreen?.classList.add('hidden');
+    if (G.running) G.paused = true;
+    buyScreen?.classList.remove('hidden');
+    renderPackList();
+  }
+
+  function openMissionDash() {
+    closeAllPanels();
+    pauseScreen?.classList.add('hidden');
+    if (G.running) G.paused = true;
+    missionDashScreen?.classList.remove('hidden');
+    const el = (id) => document.getElementById(id);
+    if (el('mdScore')) el('mdScore').textContent = G.score.toLocaleString();
+    if (el('mdTokens')) el('mdTokens').textContent = G.tokens;
+    if (el('mdOre')) el('mdOre').textContent = Math.floor(G.ore);
+    if (el('mdDebris')) el('mdDebris').textContent = G.debrisCleared;
+    if (el('mdSystems')) {
+      el('mdSystems').innerHTML =
+        `HULL ${Math.floor(G.hull)}/${CFG.player.maxHull} · ` +
+        `SHIELD ${Math.floor(G.shield)}/${Math.floor(maxShield())} · ` +
+        `FUEL ${Math.floor(G.fuel)}/${Math.floor(maxFuel())} · ` +
+        `CARGO ${Math.floor(G.ore)}/${Math.floor(maxCargo())}<br>` +
+        `Upgrades bought: ${G.sessionStats.upgradesBought} · ` +
+        `Ore sold: ${Math.floor(G.sessionStats.oreSold)} kg · ` +
+        `Damage blocked: ${Math.floor(G.sessionStats.damageBlocked)} · ` +
+        `Tokens purchased: ${G.sessionStats.tokensBought}`;
+    }
+    if (el('mdWalletLine')) {
+      el('mdWalletLine').textContent = G.wallet.connected
+        ? `Wallet: ${G.wallet.address}`
+        : 'Wallet: not linked';
+    }
+  }
+
   // ─── SHOP UI ──────────────────────────────────────────────────────────────
   function renderShopList() {
     const list = document.getElementById('shopList');
@@ -1261,13 +1583,13 @@
           <div class="shop-name">${def.name}</div>
           <div class="shop-meta">Lv ${lvl}/${def.max} · ${effect}</div>
         </div>
-        <button class="shop-buy" data-key="${key}" ${maxed || G.tokens < cost ? 'disabled' : ''}>
+        <button class="buy-btn" data-key="${key}" ${maxed || G.tokens < cost ? 'disabled' : ''}>
           ${maxed ? 'MAX' : cost + ' ◆'}
         </button>`;
       list.appendChild(row);
     }
 
-    list.querySelectorAll('.shop-buy').forEach(btn => {
+    list.querySelectorAll('.buy-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const k = btn.getAttribute('data-key');
         if (buyUpgrade(k)) renderShopList();
@@ -1277,6 +1599,7 @@
 
   function openShop() {
     if (!shopScreen) return;
+    closeAllPanels();
     G.paused = true;
     pauseScreen?.classList.add('hidden');
     shopScreen.classList.remove('hidden');
@@ -1285,9 +1608,7 @@
 
   function closeShop() {
     shopScreen?.classList.add('hidden');
-    if (G.running) {
-      G.paused = false;
-    }
+    if (G.running) G.paused = false;
   }
 
   // ─── FLOW ─────────────────────────────────────────────────────────────────
@@ -1296,13 +1617,13 @@
     pauseScreen?.classList.add('hidden');
     waveClearScreen?.classList.add('hidden');
     gameOverScreen?.classList.add('hidden');
-    shopScreen?.classList.add('hidden');
+    closeAllPanels();
 
     G.running = true;
     G.paused = false;
     G.wave = 0;
     G.score = 0;
-    G.tokens = 8; // small starting allowance
+    G.tokens = 8;
     G.ore = 0;
     G.debrisCleared = 0;
     G.hull = CFG.player.maxHull;
@@ -1324,8 +1645,12 @@
     G.floatingText = [];
     G.achievements = new Set();
     G.combo = { count: 0, timer: 0 };
-    G.sessionStats = { oreSold: 0, damageBlocked: 0, upgradesBought: 0 };
+    G.sessionStats = { oreSold: 0, damageBlocked: 0, upgradesBought: 0, tokensBought: 0 };
+    // keep wallet connection across restarts
     spawnWave(0);
+    setHudChrome(true);
+    updateLiveDash();
+    updateWalletPill();
 
     if (typeof window.initThreeRenderer === 'function') {
       try { window.initThreeRenderer(); } catch (_) {}
@@ -1349,6 +1674,8 @@
 
   function gameOver() {
     G.running = false;
+    setHudChrome(false);
+    closeAllPanels();
     document.getElementById('finalScore').textContent = G.score.toLocaleString();
     document.getElementById('finalWave').textContent = G.wave;
     document.getElementById('finalDebris').textContent = G.debrisCleared;
@@ -1356,7 +1683,7 @@
     document.getElementById('finalTokens').textContent = G.tokens;
     const extra = document.getElementById('finalExtra');
     if (extra) {
-      extra.textContent = `Blocked ${Math.floor(G.sessionStats.damageBlocked)} dmg · ${G.sessionStats.upgradesBought} upgrades`;
+      extra.textContent = `Blocked ${Math.floor(G.sessionStats.damageBlocked)} dmg · ${G.sessionStats.upgradesBought} upgrades · Bought ${G.sessionStats.tokensBought} ◆`;
     }
     gameOverScreen?.classList.remove('hidden');
   }
