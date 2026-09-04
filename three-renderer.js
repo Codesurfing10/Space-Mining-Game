@@ -205,15 +205,75 @@
         state.particlePoints.points.frustumCulled = false;
         state.scene.add(state.particlePoints.points);
 
-        // Base ring
-        const baseGeo = new THREE.RingGeometry(55, 72, 48);
-        const baseMat = new THREE.MeshBasicMaterial({
-          color: 0x00e5a0, transparent: true, opacity: 0.35, side: THREE.DoubleSide
-        });
-        const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-        baseMesh.position.set(0, 0, -5);
-        state.scene.add(baseMesh);
-        state.baseMesh = baseMesh;
+        // Station groups (HQ / docks / control centers)
+        state.stationMeshes = [];
+        function makeStationMesh(type) {
+          const g = new THREE.Group();
+          if (type === 'hq') {
+            const ring = new THREE.Mesh(
+              new THREE.RingGeometry(60, 78, 6),
+              new THREE.MeshBasicMaterial({ color: 0x00e5a0, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+            );
+            ring.position.z = -4;
+            g.add(ring);
+            const ring2 = new THREE.Mesh(
+              new THREE.RingGeometry(32, 40, 6),
+              new THREE.MeshBasicMaterial({ color: 0x00c8ff, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+            );
+            ring2.position.z = -3;
+            g.add(ring2);
+            const core = new THREE.Mesh(
+              new THREE.CylinderGeometry(8, 12, 18, 6),
+              new THREE.MeshStandardMaterial({ color: 0x00e5a0, emissive: 0x00e5a0, emissiveIntensity: 0.55, metalness: 0.4, roughness: 0.35 })
+            );
+            core.rotation.x = Math.PI / 2;
+            g.add(core);
+            const disc = new THREE.Mesh(
+              new THREE.CircleGeometry(22, 6),
+              new THREE.MeshBasicMaterial({ color: 0x003322, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+            );
+            disc.position.z = -2;
+            g.add(disc);
+          } else if (type === 'dock') {
+            const pad = new THREE.Mesh(
+              new THREE.RingGeometry(28, 48, 32),
+              new THREE.MeshBasicMaterial({ color: 0x44aaff, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+            );
+            pad.position.z = -4;
+            g.add(pad);
+            const inner = new THREE.Mesh(
+              new THREE.RingGeometry(10, 18, 32),
+              new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+            );
+            inner.position.z = -3;
+            g.add(inner);
+            const tower = new THREE.Mesh(
+              new THREE.BoxGeometry(6, 6, 14),
+              new THREE.MeshStandardMaterial({ color: 0x4488cc, emissive: 0x2244aa, emissiveIntensity: 0.4, metalness: 0.5, roughness: 0.4 })
+            );
+            tower.position.z = 4;
+            g.add(tower);
+          } else {
+            // control center
+            const diamond = new THREE.Mesh(
+              new THREE.OctahedronGeometry(16, 0),
+              new THREE.MeshStandardMaterial({ color: 0xb06aff, emissive: 0x8020ff, emissiveIntensity: 0.55, metalness: 0.3, roughness: 0.4 })
+            );
+            g.add(diamond);
+            const ring = new THREE.Mesh(
+              new THREE.RingGeometry(22, 30, 24),
+              new THREE.MeshBasicMaterial({ color: 0xb06aff, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+            );
+            ring.position.z = -3;
+            g.add(ring);
+          }
+          g.visible = false;
+          state.scene.add(g);
+          return g;
+        }
+        const types = ['hq','dock','dock','dock','control','control','dock','control'];
+        for (const t of types) state.stationMeshes.push(makeStationMesh(t));
+        state.baseMesh = state.stationMeshes[0];
 
         // Composer + bloom
         const composer = new EffectComposer(state.renderer);
@@ -343,21 +403,36 @@
         }
         hideExtra(state.mineMeshes, mc);
 
-        // Base — pulse / color when docking
-        if (state.baseMesh && G.base) {
-          state.baseMesh.position.set(G.base.x - state.worldCX, G.base.y - state.worldCY, -4);
-          state.baseMesh.rotation.z = (G.t || 0) * 0.15;
-          if (state.baseMesh.material) {
-            if (G.docking) {
-              state.baseMesh.material.color.setHex(0xffc846);
-              state.baseMesh.material.opacity = 0.35 + (G.dockProgress || 0) * 0.45;
-              state.baseMesh.scale.setScalar(1 + (G.dockProgress || 0) * 0.12);
-            } else {
-              state.baseMesh.material.color.setHex(0x00e5a0);
-              state.baseMesh.material.opacity = 0.35;
-              state.baseMesh.scale.setScalar(1);
-            }
+        // Stations sync
+        if (state.stationMeshes && G.stations) {
+          const n = Math.min(G.stations.length, state.stationMeshes.length);
+          for (let i = 0; i < n; i++) {
+            const st = G.stations[i];
+            let mesh = state.stationMeshes[i];
+            // Rebuild type if needed (simple: scale/rotate by type)
+            mesh.visible = true;
+            mesh.position.set(st.x - state.worldCX, st.y - state.worldCY, st.z || 0);
+            const active = G.docking && G.activeStation === st;
+            const spin = st.type === 'control' ? (G.t || 0) * 0.6 : (G.t || 0) * 0.15;
+            mesh.rotation.z = spin;
+            const scl = active ? 1 + (G.dockProgress || 0) * 0.15 : 1;
+            mesh.scale.setScalar(scl);
+            mesh.traverse(c => {
+              if (c.isMesh && c.material && c.material.color && c.material.transparent) {
+                if (active) {
+                  c.material.color.setHex(0xffc846);
+                  c.material.opacity = 0.35 + (G.dockProgress || 0) * 0.4;
+                } else if (st.type === 'hq') {
+                  c.material.color.setHex(0x00e5a0);
+                } else if (st.type === 'dock') {
+                  c.material.color.setHex(0x44aaff);
+                } else {
+                  c.material.color.setHex(0xb06aff);
+                }
+              }
+            });
           }
+          for (let i = n; i < state.stationMeshes.length; i++) state.stationMeshes[i].visible = false;
         }
 
         // Particles

@@ -123,7 +123,10 @@
     floatingText: [],
     cooldowns: { laser: 0, net: 0 },
     miningTarget: null,
-    base: { x: CFG.world.w / 2, y: CFG.world.h / 2, r: 70 },
+    // Stations: HQ + docking pads + control centers
+    stations: [],
+    activeStation: null,
+    base: { x: CFG.world.w / 2, y: CFG.world.h / 2, r: 70 }, // legacy alias → HQ
     camera: { x: 0, y: 0, z: 500, shake: 0 },
     achievements: new Set(),
     combo: { count: 0, timer: 0 },
@@ -168,6 +171,64 @@
     const lvl = G.upgrades[key] || 0;
     if (lvl >= def.max) return null;
     return Math.floor(def.costBase * Math.pow(def.costScale, lvl));
+  }
+
+  function initStations() {
+    const cx = CFG.world.w / 2, cy = CFG.world.h / 2;
+    G.stations = [
+      {
+        id: 'hq', type: 'hq', name: 'A·R·I·A HQ',
+        x: cx, y: cy, r: 78, z: 0,
+        services: { repair: true, refuel: true, shield: true, sell: true, shop: true },
+        color: '#00e5a0', accent: '#00c8ff', pulse: 0
+      },
+      {
+        id: 'dock-alpha', type: 'dock', name: 'Dock Alpha',
+        x: cx - 900, y: cy - 650, r: 52, z: 0,
+        services: { repair: false, refuel: true, shield: true, sell: true, shop: false },
+        color: '#44aaff', accent: '#88ccff', pulse: 0.7
+      },
+      {
+        id: 'dock-beta', type: 'dock', name: 'Dock Beta',
+        x: cx + 980, y: cy - 420, r: 52, z: 0,
+        services: { repair: false, refuel: true, shield: true, sell: true, shop: false },
+        color: '#44aaff', accent: '#88ccff', pulse: 1.4
+      },
+      {
+        id: 'dock-gamma', type: 'dock', name: 'Dock Gamma',
+        x: cx - 200, y: cy + 980, r: 52, z: 0,
+        services: { repair: true, refuel: true, shield: false, sell: true, shop: false },
+        color: '#44aaff', accent: '#88ccff', pulse: 2.1
+      },
+      {
+        id: 'cc-north', type: 'control', name: 'Control North',
+        x: cx + 700, y: cy + 780, r: 44, z: 0,
+        services: { repair: false, refuel: false, shield: false, sell: false, shop: false, intel: true },
+        color: '#b06aff', accent: '#d0a0ff', pulse: 0.3
+      },
+      {
+        id: 'cc-west', type: 'control', name: 'Control West',
+        x: cx - 1100, y: cy + 200, r: 44, z: 0,
+        services: { repair: false, refuel: false, shield: false, sell: false, shop: false, intel: true },
+        color: '#b06aff', accent: '#d0a0ff', pulse: 1.9
+      }
+    ];
+    G.base = G.stations[0];
+    G.activeStation = null;
+  }
+
+  function nearestStation(maxExtra = 50) {
+    let best = null, bestD = Infinity;
+    for (const s of G.stations) {
+      const d = dist(G.player, s) - s.r;
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    if (best && bestD < maxExtra) return best;
+    return null;
+  }
+
+  function stationInRange(s, pad = 40) {
+    return s && dist(G.player, s) < s.r + pad;
   }
 
   // ─── DOM ──────────────────────────────────────────────────────────────────
@@ -502,43 +563,82 @@
   }
 
   function tryDock() {
-    const d = dist(G.player, G.base);
-    if (d < G.base.r + 40) {
-      G.docking = true;
-      // Instant repair + sell when fully docked (progress handled in update)
+    const s = nearestStation(55);
+    if (!s) {
+      floatText(G.player.x, G.player.y - 25, 'NO STATION IN RANGE', '#ff4060');
+      return;
     }
+    if (s.type === 'control') {
+      // Instant intel ping at control centers
+      activateControlCenter(s);
+      return;
+    }
+    G.activeStation = s;
+    G.docking = true;
+    G.dockProgress = Math.max(G.dockProgress, 0.05);
+  }
+
+  function activateControlCenter(s) {
+    G.activeStation = s;
+    // Intel: reveal threats briefly + small token stipend
+    G.tokens += 1;
+    addScore(25, 'INTEL');
+    floatText(s.x, s.y - 30, 'CONTROL LINK', '#b06aff');
+    floatText(G.player.x, G.player.y - 40, '+1 ◆ INTEL', '#b06aff');
+    // Mark enemies for radar boost
+    G.controlBoostT = 12;
+    showAchievement('CONTROL LINK', 'Linked to a control center');
+    for (const d of G.drones) d.intelMarked = true;
+    for (const m of G.mines) m.intelMarked = true;
   }
 
   function completeDock() {
-    // Repair hull
-    const healed = CFG.player.maxHull - G.hull;
-    if (healed > 0) {
-      G.hull = CFG.player.maxHull;
-      floatText(G.player.x, G.player.y - 40, 'HULL REPAIRED', '#00e5a0');
-      addScore(40, 'DOCK');
-    }
-    // Refuel + shield top-up
-    G.fuel = maxFuel();
-    G.shield = maxShield();
-    floatText(G.player.x, G.player.y - 55, 'REFUEL + SHIELD', '#44aaff');
+    const s = G.activeStation || G.base;
+    const svc = s.services || {};
 
-    // Sell ore
-    if (G.ore > 0) {
+    if (svc.repair) {
+      const healed = CFG.player.maxHull - G.hull;
+      if (healed > 0) {
+        G.hull = CFG.player.maxHull;
+        floatText(G.player.x, G.player.y - 40, 'HULL REPAIRED', '#00e5a0');
+        addScore(40, 'DOCK');
+      }
+    } else if (G.hull < CFG.player.maxHull) {
+      // Partial repair at basic docks
+      G.hull = Math.min(CFG.player.maxHull, G.hull + 25);
+      floatText(G.player.x, G.player.y - 40, 'PARTIAL REPAIR +25', '#00e5a0');
+    }
+
+    if (svc.refuel) {
+      G.fuel = maxFuel();
+      floatText(G.player.x, G.player.y - 55, 'REFUELED', '#ffaa33');
+    }
+    if (svc.shield) {
+      G.shield = maxShield();
+      floatText(G.player.x, G.player.y - 70, 'SHIELD ONLINE', '#44aaff');
+    }
+
+    if (svc.sell && G.ore > 0) {
       const kg = G.ore;
       const value = Math.floor(kg * CFG.player.oreSellScore);
       const tok = Math.floor(kg / CFG.player.oreSellTokenDiv);
       addScore(value, 'ORE');
       G.tokens += tok;
       G.sessionStats.oreSold += kg;
-      floatText(G.player.x, G.player.y - 70, `+${Math.floor(kg)}kg → +${tok}◆`, '#ffc846');
+      floatText(G.player.x, G.player.y - 85, `+${Math.floor(kg)}kg → +${tok}◆`, '#ffc846');
       G.ore = 0;
-      showAchievement('FIRST SALE', 'Sold ore at base station');
-      if (kg >= maxCargo() * 0.95) {
-        showAchievement('FULL CARGO', 'Docked with a full hold');
-      }
+      showAchievement('FIRST SALE', 'Sold ore at a station');
+      if (kg >= maxCargo() * 0.95) showAchievement('FULL CARGO', 'Docked with a full hold');
     }
+
+    if (svc.shop) {
+      floatText(G.player.x, G.player.y - 100, 'HQ — PRESS U FOR UPGRADES', '#00c8ff');
+    }
+
+    floatText(s.x, s.y - s.r - 10, s.name, s.color || '#00e5a0');
     G.docking = false;
     G.dockProgress = 0;
+    G.activeStation = null;
   }
 
   function buyUpgrade(key) {
@@ -681,18 +781,28 @@
       G.shield = Math.min(maxShield(), G.shield + CFG.player.shieldRegen * dt);
     }
 
-    // Docking progress
-    if (G.docking) {
-      if (dist(p, G.base) > G.base.r + 45) {
+    // Docking progress at active station
+    if (G.docking && G.activeStation) {
+      const s = G.activeStation;
+      if (!stationInRange(s, 50)) {
         G.docking = false;
         G.dockProgress = 0;
+        G.activeStation = null;
       } else {
-        G.dockProgress = Math.min(1, G.dockProgress + dt * 0.85);
+        G.dockProgress = Math.min(1, G.dockProgress + dt * 0.9);
         if (G.dockProgress >= 1) completeDock();
       }
-    } else if (dist(p, G.base) < G.base.r + 30 && G.keys['KeyR']) {
-      G.docking = true;
+    } else if (G.keys['KeyR']) {
+      const s = nearestStation(45);
+      if (s && s.type !== 'control') {
+        G.activeStation = s;
+        G.docking = true;
+      }
     }
+
+    // Station ambient pulse + control boost timer
+    for (const s of G.stations) s.pulse = (s.pulse || 0) + dt;
+    if (G.controlBoostT > 0) G.controlBoostT = Math.max(0, G.controlBoostT - dt);
   }
 
   function updateLasers(dt) {
@@ -983,28 +1093,144 @@
     ctx.fillStyle = 'rgba(2,13,24,0.15)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Base station
-    {
-      const s = worldToScreen(G.base.x, G.base.y);
-      const dockColor = G.docking ? '#ffc846' : 'rgba(0,229,160,0.5)';
-      ctx.strokeStyle = dockColor;
-      ctx.lineWidth = G.docking ? 3 : 2;
+    // Stations: HQ, docks, control centers
+    for (const st of G.stations) {
+      const s = worldToScreen(st.x, st.y);
+      const active = G.docking && G.activeStation === st;
+      const near = stationInRange(st, 55);
+      const pulse = 0.5 + 0.5 * Math.sin((st.pulse || 0) * 2.2);
+      const col = st.color || '#00e5a0';
+
+      // Outer soft glow
       ctx.beginPath();
-      ctx.arc(s.x, s.y, G.base.r, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = G.docking ? 'rgba(255,200,70,0.12)' : 'rgba(0,229,160,0.08)';
+      ctx.arc(s.x, s.y, st.r + 18 + pulse * 6, 0, Math.PI * 2);
+      ctx.fillStyle = active ? 'rgba(255,200,70,0.08)' : (near ? col.replace(')', ',0.07)').replace('rgb', 'rgba').replace('#', '') : 'transparent');
+      // use hex alpha via globalAlpha
+      ctx.globalAlpha = active ? 0.14 : near ? 0.09 : 0.04;
+      ctx.fillStyle = col;
       ctx.fill();
-      if (G.docking && G.dockProgress > 0) {
+      ctx.globalAlpha = 1;
+
+      if (st.type === 'hq') {
+        // Hex ring
+        ctx.strokeStyle = active ? '#ffc846' : col;
+        ctx.lineWidth = active ? 3 : 2;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 - Math.PI / 2 + (G.t || 0) * 0.15;
+          const rr = st.r;
+          const px = s.x + Math.cos(a) * rr, py = s.y + Math.sin(a) * rr;
+          i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        // Inner hex
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 - Math.PI / 2 - (G.t || 0) * 0.1;
+          const rr = st.r * 0.55;
+          const px = s.x + Math.cos(a) * rr, py = s.y + Math.sin(a) * rr;
+          i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        // Core
+        ctx.fillStyle = col;
+        ctx.shadowColor = col;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        // Spokes
+        ctx.strokeStyle = 'rgba(0,229,160,0.35)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + (G.t || 0) * 0.15;
+          ctx.beginPath();
+          ctx.moveTo(s.x + Math.cos(a) * 12, s.y + Math.sin(a) * 12);
+          ctx.lineTo(s.x + Math.cos(a) * (st.r - 6), s.y + Math.sin(a) * (st.r - 6));
+          ctx.stroke();
+        }
+      } else if (st.type === 'dock') {
+        // Landing pad: double ring + cross
+        ctx.strokeStyle = active ? '#ffc846' : col;
+        ctx.lineWidth = active ? 2.5 : 1.5;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, st.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, st.r * 0.65, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        // Pad cross
+        ctx.strokeStyle = active ? '#ffc846' : 'rgba(68,170,255,0.55)';
+        ctx.lineWidth = 2;
+        const c = st.r * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(s.x - c, s.y); ctx.lineTo(s.x + c, s.y);
+        ctx.moveTo(s.x, s.y - c); ctx.lineTo(s.x, s.y + c);
+        ctx.stroke();
+        // Corner brackets
+        const b = st.r * 0.72;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        const corners = [[-1,-1],[1,-1],[1,1],[-1,1]];
+        for (const [ox, oy] of corners) {
+          ctx.beginPath();
+          ctx.moveTo(s.x + ox * b, s.y + oy * (b - 10));
+          ctx.lineTo(s.x + ox * b, s.y + oy * b);
+          ctx.lineTo(s.x + ox * (b - 10), s.y + oy * b);
+          ctx.stroke();
+        }
+      } else if (st.type === 'control') {
+        // Diamond + radar sweeps
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate((G.t || 0) * 0.4);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -st.r); ctx.lineTo(st.r * 0.7, 0); ctx.lineTo(0, st.r); ctx.lineTo(-st.r * 0.7, 0);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+        // Sweep arc
+        ctx.strokeStyle = `rgba(176,106,255,${0.25 + pulse * 0.35})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, st.r + 10, (G.t || 0) * 1.5, (G.t || 0) * 1.5 + 1.2);
+        ctx.stroke();
+        ctx.fillStyle = col;
+        ctx.shadowColor = col;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Dock progress ring
+      if (active && G.dockProgress > 0) {
         ctx.strokeStyle = '#ffc846';
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, G.base.r + 8, -Math.PI / 2, -Math.PI / 2 + G.dockProgress * Math.PI * 2);
+        ctx.arc(s.x, s.y, st.r + 10, -Math.PI / 2, -Math.PI / 2 + G.dockProgress * Math.PI * 2);
         ctx.stroke();
       }
-      ctx.fillStyle = '#00e5a0';
+
+      // Label
       ctx.font = '11px Courier New';
       ctx.textAlign = 'center';
-      ctx.fillText(G.docking ? 'DOCKING…' : 'BASE  [R] DOCK', s.x, s.y + G.base.r + 14);
+      ctx.fillStyle = active ? '#ffc846' : col;
+      let label = st.name;
+      if (active) label = 'DOCKING…';
+      else if (near && st.type === 'control') label = st.name + '  [R] LINK';
+      else if (near) label = st.name + '  [R] DOCK';
+      ctx.fillText(label, s.x, s.y + st.r + 16);
     }
 
     for (const a of G.asteroids) {
@@ -1240,11 +1466,15 @@
       ctx.stroke();
     }
 
-    // Base
-    ctx.fillStyle = '#00e5a0';
-    ctx.beginPath();
-    ctx.arc(mx + G.base.x * sx, my + G.base.y * sy, 4, 0, Math.PI * 2);
-    ctx.fill();
+        // Stations on radar
+    for (const st of G.stations) {
+      const color = st.type === 'hq' ? '#00e5a0' : st.type === 'dock' ? '#44aaff' : '#b06aff';
+      const rad = st.type === 'hq' ? 4 : 3;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(mx + st.x * sx, my + st.y * sy, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // Asteroids (brown)
     ctx.fillStyle = '#c0a060';
@@ -1268,8 +1498,15 @@
     // Drones — threat size by distance
     for (const d of G.drones) {
       const dd = dist(G.player, d);
-      const sz = clamp(4 - dd / 400, 2, 4);
+      const sz = clamp(4 - dd / 400, 2, 4) + ((G.controlBoostT > 0 || d.intelMarked) ? 1.5 : 0);
       ctx.fillStyle = dd < 300 ? '#ff2040' : '#ff6080';
+      if (G.controlBoostT > 0 || d.intelMarked) {
+        ctx.strokeStyle = '#b06aff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(mx + d.x * sx, my + d.y * sy, sz + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.beginPath();
       ctx.arc(mx + d.x * sx, my + d.y * sy, sz, 0, Math.PI * 2);
       ctx.fill();
