@@ -203,7 +203,29 @@ body::before {
 
 /* Bar polish for canvas-adjacent labels */
 .glow-text { text-shadow:0 0 10px currentColor; }
-</style>
+
+    .srx-panel {
+      position: fixed; top: 12px; right: 12px; z-index: 40;
+      min-width: 220px; max-width: 280px;
+      background: rgba(6,18,32,0.88); border: 1px solid rgba(94,234,212,0.35);
+      border-radius: 10px; padding: 10px 12px;
+      font-family: 'Courier New', monospace; font-size: 11px; color: #c8e8f0;
+      backdrop-filter: blur(8px); pointer-events: auto;
+    }
+    .srx-panel .srx-head { color: #5eead4; font-weight: bold; letter-spacing: 0.06em; margin-bottom: 6px; }
+    .srx-panel .srx-row { margin: 3px 0; }
+    .srx-panel .srx-row.muted { opacity: 0.65; font-size: 10px; }
+    .srx-panel .up { color: #4ade80; }
+    .srx-panel .down { color: #f87171; }
+    .srx-panel .srx-btn {
+      margin-top: 8px; width: 100%; cursor: pointer;
+      background: linear-gradient(135deg,#0f766e,#0e7490); color: #ecfeff;
+      border: none; border-radius: 6px; padding: 6px 8px; font: inherit;
+    }
+    .srx-panel .srx-btn:hover { filter: brightness(1.15); }
+    .srx-actions { margin-top: 4px; }
+
+  </style>
 </head>
 <body>
 
@@ -213,7 +235,10 @@ body::before {
 <div class="corner br"></div>
 
 <!-- LIVE DASHBOARD -->
-<div id="liveDash">
+
+  <div id="srxPanel" class="srx-panel" aria-label="Space Resource Exchange"></div>
+
+  <div id="liveDash">
   <div class="dash-chip"><div class="lbl">SCORE</div><div class="val gold" id="dashScore">0</div></div>
   <div class="dash-chip"><div class="lbl">TOKENS ◆</div><div class="val green" id="dashTokens">0</div></div>
   <div class="dash-chip"><div class="lbl">WAVE</div><div class="val" id="dashWave">1</div></div>
@@ -411,5 +436,6 @@ import('./three-renderer.js')
   });
 </script>
 <script src="game.js"></script>
+  <script src="srx-bridge.js"></script>
 </body>
 </html>

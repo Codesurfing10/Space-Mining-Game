@@ -8,6 +8,12 @@
 
   // ─── CONFIG ───────────────────────────────────────────────────────────────
   const CFG = {
+    srx: {
+      baseUrl: 'https://space-resource-exchange.onrender.com', // set to your Render URL
+      siteUrl: 'https://github.com/Codesurfing10/SPACEREASOURCEEXCHANGE',
+      apiKey: '', // optional shared secret matching MINING_GAME_API_KEY
+      enabled: true
+    },
     world: { w: 4000, h: 4000, depth: 800 },
     player: {
       accel: 420,
@@ -627,6 +633,17 @@
       G.tokens += tok;
       G.sessionStats.oreSold += kg;
       floatText(G.player.x, G.player.y - 85, `+${Math.floor(kg)}kg → +${tok}◆`, '#ffc846');
+      // Push haul to Space Resource Exchange at live mark
+      if (CFG.srx && CFG.srx.enabled && window.SRX) {
+        const quality = 1 + Math.min(0.5, (G.wave || 0) * 0.03);
+        window.SRX.depositGameOre(kg, quality).then((res) => {
+          if (res && res.ok) {
+            floatText(G.player.x, G.player.y - 110, `SRX +$${res.total_usd_mark} mark`, '#5eead4');
+            showAchievement('EXCHANGE CREDIT', 'Ore posted to Space Resource Exchange');
+            if (typeof updateSrxPanel === 'function') updateSrxPanel();
+          }
+        }).catch((err) => console.warn('SRX deposit', err));
+      }
       G.ore = 0;
       showAchievement('FIRST SALE', 'Sold ore at a station');
       if (kg >= maxCargo() * 0.95) showAchievement('FULL CARGO', 'Docked with a full hold');
@@ -1716,6 +1733,38 @@
   }
 
   // ─── FLOW ─────────────────────────────────────────────────────────────────
+
+  function updateSrxPanel() {
+    const el = document.getElementById('srxPanel');
+    if (!el || !window.SRX) return;
+    const st = SRX.state;
+    const prices = st.prices || {};
+    const ore = prices.ASTEROID_ORE;
+    const acc = st.account;
+    let html = '<div class="srx-head">SPACE RESOURCE EXCHANGE</div>';
+    if (ore) {
+      const ch = ore.change_24h_pct || 0;
+      html += `<div class="srx-row">ASTEROID ORE <b>$${ore.price_usd}/kg</b> <span class="${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch}%</span></div>`;
+    }
+    if (acc && acc.balances) {
+      html += `<div class="srx-row">Account mark <b>$${(acc.total_usd_mark||0).toFixed(2)}</b></div>`;
+      const lines = Object.entries(acc.balances).slice(0, 4).map(([k,v]) => `${k}: ${Number(v).toFixed(2)}`).join(' · ');
+      if (lines) html += `<div class="srx-row muted">${lines}</div>`;
+    } else if (st.lastError) {
+      html += `<div class="srx-row muted">Offline — ${st.lastError.slice(0,40)}</div>`;
+    } else {
+      html += '<div class="srx-row muted">Connecting to exchange…</div>';
+    }
+    html += `<div class="srx-actions"><button type="button" id="srxOpenBtn" class="srx-btn">Open Exchange</button></div>`;
+    el.innerHTML = html;
+    const btn = document.getElementById('srxOpenBtn');
+    if (btn) btn.onclick = () => SRX.openExchange();
+  }
+  window.updateSrxPanel = updateSrxPanel;
+  window.addEventListener('srx:prices', updateSrxPanel);
+  window.addEventListener('srx:account', updateSrxPanel);
+  window.addEventListener('srx:deposit', updateSrxPanel);
+
   function startGame() {
     titleScreen?.classList.add('hidden');
     pauseScreen?.classList.add('hidden');
