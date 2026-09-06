@@ -1169,6 +1169,7 @@
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Stations: HQ, docks, control centers
+    if (!G.stations || G.stations.length === 0) initStations();
     for (const st of G.stations) {
       const s = worldToScreen(st.x, st.y);
       const active = G.docking && G.activeStation === st;
@@ -1176,14 +1177,20 @@
       const pulse = 0.5 + 0.5 * Math.sin((st.pulse || 0) * 2.2);
       const col = st.color || '#00e5a0';
 
-      // Outer soft glow
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, st.r + 18 + pulse * 6, 0, Math.PI * 2);
-      ctx.fillStyle = active ? 'rgba(255,200,70,0.08)' : (near ? col.replace(')', ',0.07)').replace('rgb', 'rgba').replace('#', '') : 'transparent');
-      // use hex alpha via globalAlpha
-      ctx.globalAlpha = active ? 0.14 : near ? 0.09 : 0.04;
+      // Outer soft glow (always visible)
+      ctx.globalAlpha = active ? 0.22 : near ? 0.16 : 0.10;
       ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, st.r + 22 + pulse * 8, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
+      // Solid outer ring so base is never invisible
+      ctx.strokeStyle = active ? '#ffc846' : col;
+      ctx.lineWidth = active ? 4 : 2.5;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, st.r, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.globalAlpha = 1;
 
       if (st.type === 'hq') {
@@ -1948,8 +1955,8 @@
       miningSpeed: 0, laserDamage: 0, netRadius: 0,
       enginePower: 0, cargoCap: 0, shieldMax: 0, fuelTank: 0
     };
-    G.player.x = CFG.world.w / 2;
-    G.player.y = CFG.world.h / 2;
+    G.player.x = CFG.world.w / 2 + 120;
+    G.player.y = CFG.world.h / 2 + 80;
     G.player.vx = 0;
     G.player.vy = 0;
     G.player.angle = 0;
@@ -1959,6 +1966,7 @@
     G.combo = { count: 0, timer: 0 };
     G.sessionStats = { oreSold: 0, damageBlocked: 0, upgradesBought: 0, tokensBought: 0 };
     // keep wallet connection across restarts
+    initStations();
     spawnWave(0);
     setHudChrome(true);
     updateLiveDash();
