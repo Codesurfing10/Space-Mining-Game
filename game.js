@@ -1360,18 +1360,187 @@
       ctx.shadowBlur = 0;
     }
 
-    // Asteroids (brown)
+    // ── World entities ───────────────────────────────────────────────────
+    // Asteroids
+    for (const a of G.asteroids) {
+      const s = worldToScreen(a.x, a.y);
+      const r = a.r || 20;
+      ctx.fillStyle = '#a08050';
+      ctx.strokeStyle = '#c0a060';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (a.ore > 0) {
+        ctx.fillStyle = 'rgba(255,200,70,0.35)';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, r * (a.ore / (a.maxOre || a.ore || 1)) * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Debris
+    for (const d of G.debris) {
+      const s = worldToScreen(d.x, d.y);
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate((d.angle || 0) + G.t);
+      ctx.fillStyle = d.rarity > 1.5 ? '#ffc846' : '#8899cc';
+      ctx.fillRect(-6, -4, 12, 8);
+      ctx.restore();
+    }
+
+    // Mines
+    for (const m of G.mines) {
+      const s = worldToScreen(m.x, m.y);
+      const pulse = 0.7 + 0.3 * Math.sin(G.t * 6);
+      ctx.fillStyle = `rgba(255,64,96,${pulse})`;
+      ctx.shadowColor = '#ff4060';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,100,100,0.4)';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, m.triggerR || 40, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Drones
+    for (const d of G.drones) {
+      const s = worldToScreen(d.x, d.y);
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(d.angle || 0);
+      ctx.fillStyle = '#ff4060';
+      ctx.shadowColor = '#ff2040';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(12, 0); ctx.lineTo(-8, -7); ctx.lineTo(-8, 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      if (d.intelMarked || G.controlBoostT > 0) {
+        ctx.strokeStyle = '#b06aff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Lasers
+    if (G.lasers) {
+      for (const L of G.lasers) {
+        ctx.strokeStyle = 'rgba(0,220,255,0.85)';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#00c8ff';
+        ctx.shadowBlur = 6;
+        const a = worldToScreen(L.x, L.y);
+        const b = worldToScreen(L.x + Math.cos(L.angle) * 24, L.y + Math.sin(L.angle) * 24);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    // Particles
+    for (const p of G.particles) {
+      const s = worldToScreen(p.x, p.y);
+      ctx.globalAlpha = Math.max(0, p.life || 0.5);
+      ctx.fillStyle = p.color || '#fff';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, p.size || 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Floating text
+    if (G.floatingText) {
+      for (const ft of G.floatingText) {
+        const s = worldToScreen(ft.x, ft.y);
+        ctx.globalAlpha = Math.max(0, ft.life || 1);
+        ctx.fillStyle = ft.color || '#ffc846';
+        ctx.font = '12px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, s.x, s.y);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // PLAYER SHIP
+    if (G.running && G.player) drawShip(G.player);
+
+    // Dock progress near ship
+    if (G.docking) {
+      const s = worldToScreen(G.player.x, G.player.y);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(s.x - 40, s.y - 36, 80, 8);
+      ctx.fillStyle = '#ffc846';
+      ctx.fillRect(s.x - 40, s.y - 36, 80 * G.dockProgress, 8);
+      ctx.fillStyle = '#ffc846';
+      ctx.font = '10px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('DOCKING', s.x, s.y - 40);
+    }
+
+    // ── RADAR / MINIMAP ──────────────────────────────────────────────────
+    drawRadar();
+  }
+
+  function drawRadar() {
+    const rw = 160, rh = 160, pad = 14;
+    const mx0 = pad, my0 = canvas.height - rh - pad;
+    ctx.fillStyle = 'rgba(4,12,22,0.82)';
+    ctx.strokeStyle = 'rgba(0,200,180,0.45)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(mx0, my0, rw, rh, 8) : ctx.rect(mx0, my0, rw, rh);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = '10px Courier New';
+    ctx.fillStyle = '#5eead4';
+    ctx.textAlign = 'left';
+    ctx.fillText('RADAR', mx0 + 8, my0 + 14);
+
+    const sx = rw / CFG.world.w, sy = rh / CFG.world.h;
+    const mx = mx0, my = my0;
+
+    // Range rings
+    ctx.strokeStyle = 'rgba(0,180,160,0.15)';
+    ctx.lineWidth = 1;
+    for (const f of [0.25, 0.5, 0.75]) {
+      ctx.beginPath();
+      ctx.arc(mx + rw / 2, my + rh / 2, Math.min(rw, rh) * f * 0.48, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Stations
+    for (const st of G.stations) {
+      const color = st.type === 'hq' ? '#5eead4' : st.type === 'dock' ? '#38bdf8' : '#c084fc';
+      const rad = st.type === 'hq' ? 5 : 3.5;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(mx + st.x * sx, my + st.y * sy, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Asteroids
     ctx.fillStyle = '#c0a060';
     for (const a of G.asteroids) {
-      const sz = 1.5 + (a.r / 55) * 1.5;
+      const sz = 1.5 + ((a.r || 20) / 55) * 1.5;
       ctx.fillRect(mx + a.x * sx - sz / 2, my + a.y * sy - sz / 2, sz, sz);
     }
-    // Debris (purple / gold if rare)
+    // Debris
     for (const d of G.debris) {
       ctx.fillStyle = d.rarity > 1.5 ? '#ffc846' : '#b06aff';
       ctx.fillRect(mx + d.x * sx - 1, my + d.y * sy - 1, 2.5, 2.5);
     }
-    // Mines — blink
+    // Mines
     const blink = Math.sin(G.t * 8) > 0;
     ctx.fillStyle = blink ? '#ff4060' : '#aa2030';
     for (const m of G.mines) {
@@ -1379,7 +1548,7 @@
       ctx.arc(mx + m.x * sx, my + m.y * sy, 2.2, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Drones — threat size by distance
+    // Drones
     for (const d of G.drones) {
       const dd = dist(G.player, d);
       const sz = clamp(4 - dd / 400, 2, 4) + ((G.controlBoostT > 0 || d.intelMarked) ? 1.5 : 0);
@@ -1396,29 +1565,16 @@
       ctx.fill();
     }
     // Player
+    const prx = mx + G.player.x * sx, pry = my + G.player.y * sy;
     ctx.fillStyle = '#00c8ff';
     ctx.beginPath();
     ctx.arc(prx, pry, 3.5, 0, Math.PI * 2);
     ctx.fill();
-    // Player facing
     ctx.strokeStyle = '#00c8ff';
     ctx.beginPath();
     ctx.moveTo(prx, pry);
     ctx.lineTo(prx + Math.cos(G.player.angle) * 8, pry + Math.sin(G.player.angle) * 8);
     ctx.stroke();
-
-    // Dock progress UI near ship if docking
-    if (G.docking) {
-      const s = worldToScreen(G.player.x, G.player.y);
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(s.x - 40, s.y - 36, 80, 8);
-      ctx.fillStyle = '#ffc846';
-      ctx.fillRect(s.x - 40, s.y - 36, 80 * G.dockProgress, 8);
-      ctx.fillStyle = '#ffc846';
-      ctx.font = '10px Courier New';
-      ctx.textAlign = 'center';
-      ctx.fillText('DOCKING', s.x, s.y - 40);
-    }
   }
 
   // ─── LIVE DASHBOARD ───────────────────────────────────────────────────────
@@ -1426,6 +1582,9 @@
     liveDash?.classList.toggle('on', on);
     actionRail?.classList.toggle('on', on);
     walletPill?.classList.toggle('on', on);
+    document.getElementById('shipHelp')?.classList.toggle('on', on);
+    document.getElementById('radarLegend')?.classList.toggle('on', on);
+    document.getElementById('srxPanel')?.style && (document.getElementById('srxPanel').style.display = on ? 'block' : 'none');
   }
 
   function updateLiveDash() {

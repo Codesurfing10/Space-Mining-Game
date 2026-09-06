@@ -1,18 +1,2 @@
-Space-Mining-Game — SRX integration drop-in
-==========================================
-1. Copy these files into your Space-Mining-Game repo root (overwrite):
-   - game.js
-   - index.html
-   - three-renderer.js
-   - srx-bridge.js
-   - README.md
-
-2. Set your exchange URL in game.js CFG.srx.baseUrl
-   (or window.SRX_CONFIG.baseUrl) to your Render SRX deploy.
-
-3. Open index.html / serve the folder and Launch Mission.
-   Top-right panel = live prices + Open Exchange link.
-   Docking & selling ore posts haul to the exchange account.
-
-Repo: https://github.com/Codesurfing10/Space-Mining-Game
-Exchange: https://github.com/Codesurfing10/SPACEREASOURCEEXCHANGE
+Space-Mining-Game (restored ship + radar + help + stations + SRX)
+Copy all files into repo root and hard-refresh browser after Launch.

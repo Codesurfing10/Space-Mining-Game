@@ -225,6 +225,33 @@ body::before {
     .srx-panel .srx-btn:hover { filter: brightness(1.15); }
     .srx-actions { margin-top: 4px; }
 
+  
+    #shipHelp {
+      position: fixed; left: 14px; top: 14px; z-index: 35;
+      width: 210px; display: none;
+      background: rgba(6,16,28,0.9); border: 1px solid rgba(0,200,255,0.35);
+      border-radius: 10px; padding: 10px 12px;
+      font: 11px/1.45 'Courier New', monospace; color: #b8d4e0;
+      backdrop-filter: blur(8px);
+    }
+    #shipHelp.on { display: block; }
+    #shipHelp h3 { margin: 0 0 6px; color: #00c8ff; font-size: 12px; letter-spacing: 0.08em; }
+    #shipHelp kbd {
+      display: inline-block; min-width: 1.4em; padding: 1px 5px; margin-right: 4px;
+      border: 1px solid rgba(0,200,255,0.4); border-radius: 4px; color: #7dd3fc; font-size: 10px;
+    }
+    #shipHelp .row { margin: 3px 0; }
+    #radarLegend {
+      position: fixed; left: 14px; bottom: 180px; z-index: 35;
+      font: 10px 'Courier New', monospace; color: #7a9aaa; display: none;
+    }
+    #radarLegend.on { display: block; }
+    #radarLegend span { margin-right: 8px; }
+    #radarLegend .hq { color: #5eead4; }
+    #radarLegend .dock { color: #38bdf8; }
+    #radarLegend .ctl { color: #c084fc; }
+    #radarLegend .you { color: #00c8ff; }
+
   </style>
 </head>
 <body>
@@ -237,6 +264,22 @@ body::before {
 <!-- LIVE DASHBOARD -->
 
   <div id="srxPanel" class="srx-panel" aria-label="Space Resource Exchange"></div>
+
+  
+  <div id="shipHelp">
+    <h3>SHIP SYSTEMS</h3>
+    <div class="row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Thrust</div>
+    <div class="row"><kbd>Mouse</kbd> Aim · <kbd>LMB</kbd> Laser · <kbd>RMB</kbd> Net</div>
+    <div class="row"><kbd>E</kbd> Mine asteroid · <kbd>R</kbd> Dock / Control</div>
+    <div class="row"><kbd>Shift</kbd> Brake · <kbd>U</kbd> Upgrades · <kbd>P</kbd> Pause</div>
+    <div class="row" style="margin-top:8px;opacity:0.75">Dock at hangars to sell ore → SRX</div>
+  </div>
+  <div id="radarLegend">
+    <span class="hq">■ HQ</span>
+    <span class="dock">■ Hangar</span>
+    <span class="ctl">■ Tower</span>
+    <span class="you">● You</span>
+  </div>
 
   <div id="liveDash">
   <div class="dash-chip"><div class="lbl">SCORE</div><div class="val gold" id="dashScore">0</div></div>
