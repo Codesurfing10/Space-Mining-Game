@@ -41,45 +41,119 @@
 
       function createShip() {
         const g = new THREE.Group();
-        const bodyMat = new THREE.MeshStandardMaterial({
-          color: 0x00c8ff, metalness: 0.35, roughness: 0.4,
-          emissive: 0x003344, emissiveIntensity: 0.35
+        const hullMat = new THREE.MeshStandardMaterial({
+          color: 0x1a9ec4, metalness: 0.55, roughness: 0.32,
+          emissive: 0x003850, emissiveIntensity: 0.4
         });
-        const nose = new THREE.Mesh(new THREE.ConeGeometry(5, 16, 6), bodyMat);
-        nose.rotation.z = -Math.PI / 2;
-        nose.position.x = 8;
-        g.add(nose);
+        const accentMat = new THREE.MeshStandardMaterial({
+          color: 0x00e5ff, metalness: 0.6, roughness: 0.25,
+          emissive: 0x00aacc, emissiveIntensity: 0.55
+        });
+        const wingMat = new THREE.MeshStandardMaterial({
+          color: 0x0a6a8a, metalness: 0.65, roughness: 0.28,
+          emissive: 0x002233, emissiveIntensity: 0.25
+        });
+        const cargoMat = new THREE.MeshStandardMaterial({
+          color: 0x2a3a48, metalness: 0.4, roughness: 0.55,
+          emissive: 0x111820, emissiveIntensity: 0.2
+        });
+        const cargoGlow = new THREE.MeshStandardMaterial({
+          color: 0xffc846, metalness: 0.3, roughness: 0.4,
+          emissive: 0xaa7700, emissiveIntensity: 0.35
+        });
+        const cockMat = new THREE.MeshStandardMaterial({
+          color: 0xaaffff, emissive: 0x00ffff, emissiveIntensity: 1.1,
+          transparent: true, opacity: 0.92, metalness: 0.1, roughness: 0.1
+        });
+        const thrMat = new THREE.MeshStandardMaterial({
+          color: 0xff6b35, emissive: 0xff4400, emissiveIntensity: 1.2
+        });
 
-        const body = new THREE.Mesh(new THREE.BoxGeometry(12, 7, 6), bodyMat);
-        body.position.x = -2;
+        // Main fuselage
+        const body = new THREE.Mesh(new THREE.BoxGeometry(14, 5.5, 5.5), hullMat);
+        body.position.set(-1, 0, 0);
         g.add(body);
 
-        const wingMat = new THREE.MeshStandardMaterial({ color: 0x0088aa, metalness: 0.5, roughness: 0.35 });
-        const wingL = new THREE.Mesh(new THREE.BoxGeometry(6, 1.5, 10), wingMat);
-        wingL.position.set(-2, 0, 6);
-        g.add(wingL);
-        const wingR = wingL.clone();
-        wingR.position.z = -6;
-        g.add(wingR);
+        // Nose cone
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(3.2, 12, 8), hullMat);
+        nose.rotation.z = -Math.PI / 2;
+        nose.position.set(10, 0, 0);
+        g.add(nose);
 
-        const cockMat = new THREE.MeshStandardMaterial({
-          color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.9, transparent: true, opacity: 0.9
-        });
-        const cock = new THREE.Mesh(new THREE.SphereGeometry(2.4, 12, 8), cockMat);
-        cock.position.set(2, 2, 0);
+        // Cargo hull (rear belly bay)
+        const cargo = new THREE.Mesh(new THREE.BoxGeometry(9, 4.5, 7.5), cargoMat);
+        cargo.position.set(-8, -1.2, 0);
+        cargo.userData.cargoHull = true;
+        g.add(cargo);
+        // Cargo stripe lights
+        for (let i = 0; i < 3; i++) {
+          const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 6.8), cargoGlow);
+          stripe.position.set(-5 - i * 2.2, -3.2, 0);
+          g.add(stripe);
+        }
+        // Cargo door frame
+        const door = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3.2, 5), accentMat);
+        door.position.set(-12.5, -1, 0);
+        g.add(door);
+
+        // Swept wings
+        const wingShape = (side) => {
+          const w = new THREE.Group();
+          const main = new THREE.Mesh(new THREE.BoxGeometry(8, 0.7, 14), wingMat);
+          main.position.set(-2, 0, side * 9);
+          main.rotation.y = side * 0.18;
+          main.rotation.z = side * 0.08;
+          w.add(main);
+          // Wing tip fin
+          const fin = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 0.6), accentMat);
+          fin.position.set(-4, 1.5, side * 15);
+          w.add(fin);
+          // Engine pod under wing
+          const pod = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 5, 8), hullMat);
+          pod.rotation.z = Math.PI / 2;
+          pod.position.set(-3, -1.5, side * 10);
+          w.add(pod);
+          const glow = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 1.2, 8), thrMat);
+          glow.rotation.z = Math.PI / 2;
+          glow.position.set(-5.5, -1.5, side * 10);
+          glow.userData.thruster = true;
+          w.add(glow);
+          return w;
+        };
+        g.add(wingShape(1));
+        g.add(wingShape(-1));
+
+        // Dorsal fin
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 0.7), wingMat);
+        fin.position.set(-3, 4, 0);
+        fin.rotation.z = 0.15;
+        g.add(fin);
+
+        // Cockpit canopy
+        const cock = new THREE.Mesh(new THREE.SphereGeometry(2.6, 16, 12), cockMat);
+        cock.position.set(4, 2.8, 0);
+        cock.scale.set(1.3, 0.85, 1);
         cock.userData.emissive = true;
         g.add(cock);
 
-        const thrMat = new THREE.MeshStandardMaterial({
-          color: 0xff6b35, emissive: 0xff6b35, emissiveIntensity: 0.7
-        });
-        const thr = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.8, 5, 8), thrMat);
+        // Main rear thruster
+        const thr = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.2, 6, 10), thrMat);
         thr.rotation.z = Math.PI / 2;
-        thr.position.x = -10;
+        thr.position.set(-14, 0, 0);
         thr.userData.thruster = true;
         g.add(thr);
 
-        g.scale.setScalar(1.15);
+        // Hull running lights
+        for (const z of [-2.5, 2.5]) {
+          const lite = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 8, 8),
+            new THREE.MeshStandardMaterial({ color: 0x00ffaa, emissive: 0x00ffaa, emissiveIntensity: 2 })
+          );
+          lite.position.set(6, 0.5, z);
+          g.add(lite);
+        }
+
+        g.scale.setScalar(1.05);
         g.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
         return g;
       }
@@ -92,7 +166,8 @@
         state.worldCY = CFG.world.h / 2;
 
         state.scene = new THREE.Scene();
-        state.scene.fog = new THREE.FogExp2(0x020d18, 0.00035);
+        state.scene.fog = new THREE.FogExp2(0x030a14, 0.00028);
+        state.scene.background = null;
 
         state.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 2, 12000);
 
@@ -106,8 +181,9 @@
         document.getElementById('threeContainer')?.appendChild(state.renderer.domElement);
 
         // Lights
-        state.scene.add(new THREE.AmbientLight(0x668899, 0.55));
-        const sun = new THREE.DirectionalLight(0xffffff, 1.05);
+        state.scene.add(new THREE.AmbientLight(0x445566, 0.4));
+        state.scene.add(new THREE.HemisphereLight(0x224466, 0x020810, 0.55));
+        const sun = new THREE.DirectionalLight(0xfff0dd, 1.25);
         sun.position.set(400, 600, 300);
         sun.castShadow = true;
         sun.shadow.mapSize.set(1024, 1024);
@@ -117,12 +193,16 @@
         sun.shadow.camera.bottom = -900;
         sun.shadow.camera.far = 3500;
         state.scene.add(sun);
-        const rim = new THREE.DirectionalLight(0x44aaff, 0.25);
+        const rim = new THREE.DirectionalLight(0x4488ff, 0.45);
+        const point = new THREE.PointLight(0x00c8ff, 0.8, 2000);
+        point.position.set(0, 0, 120);
+        state.scene.add(point);
+        state.pointLight = point;
         rim.position.set(-500, -200, 200);
         state.scene.add(rim);
 
         // Stars
-        const starN = 1200;
+        const starN = 2800;
         const starPos = new Float32Array(starN * 3);
         for (let i = 0; i < starN; i++) {
           starPos[i * 3] = (Math.random() - 0.5) * CFG.world.w * 1.4;
@@ -132,8 +212,29 @@
         const starGeo = new THREE.BufferGeometry();
         starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
         state.scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({
-          color: 0xaaccff, size: 1.8, transparent: true, opacity: 0.85, sizeAttenuation: true
+          color: 0xcce8ff, size: 2.2, transparent: true, opacity: 0.9, sizeAttenuation: true
         })));
+
+        // Nebula clouds (soft sprites)
+        const nebulaGroup = new THREE.Group();
+        const nebulaColors = [0x0a2040, 0x1a1040, 0x042030, 0x201028];
+        for (let i = 0; i < 14; i++) {
+          const geo = new THREE.SphereGeometry(180 + Math.random() * 320, 16, 12);
+          const mat = new THREE.MeshBasicMaterial({
+            color: nebulaColors[i % nebulaColors.length],
+            transparent: true, opacity: 0.04 + Math.random() * 0.05,
+            depthWrite: false
+          });
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.set(
+            (Math.random() - 0.5) * CFG.world.w * 0.9,
+            (Math.random() - 0.5) * CFG.world.h * 0.9,
+            -400 - Math.random() * 1200
+          );
+          nebulaGroup.add(mesh);
+        }
+        state.scene.add(nebulaGroup);
+        state.nebulaGroup = nebulaGroup;
 
         // Ship
         state.ship = createShip();
@@ -210,62 +311,115 @@
         function makeStationMesh(type) {
           const g = new THREE.Group();
           if (type === 'hq') {
+            // Multi-level HQ complex
+            const padMat = new THREE.MeshStandardMaterial({
+              color: 0x0a3020, metalness: 0.5, roughness: 0.4,
+              emissive: 0x00e5a0, emissiveIntensity: 0.15
+            });
+            const pad = new THREE.Mesh(new THREE.CylinderGeometry(70, 78, 4, 6), padMat);
+            pad.rotation.x = Math.PI / 2;
+            g.add(pad);
             const ring = new THREE.Mesh(
-              new THREE.RingGeometry(60, 78, 6),
-              new THREE.MeshBasicMaterial({ color: 0x00e5a0, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+              new THREE.TorusGeometry(62, 1.8, 8, 6),
+              new THREE.MeshStandardMaterial({ color: 0x00e5a0, emissive: 0x00e5a0, emissiveIntensity: 0.8 })
             );
-            ring.position.z = -4;
+            ring.position.z = 3;
             g.add(ring);
             const ring2 = new THREE.Mesh(
-              new THREE.RingGeometry(32, 40, 6),
-              new THREE.MeshBasicMaterial({ color: 0x00c8ff, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+              new THREE.TorusGeometry(40, 1.2, 8, 6),
+              new THREE.MeshStandardMaterial({ color: 0x00c8ff, emissive: 0x00c8ff, emissiveIntensity: 0.7 })
             );
-            ring2.position.z = -3;
+            ring2.position.z = 5;
             g.add(ring2);
-            const core = new THREE.Mesh(
-              new THREE.CylinderGeometry(8, 12, 18, 6),
-              new THREE.MeshStandardMaterial({ color: 0x00e5a0, emissive: 0x00e5a0, emissiveIntensity: 0.55, metalness: 0.4, roughness: 0.35 })
+            // Central tower
+            const tower = new THREE.Mesh(
+              new THREE.CylinderGeometry(6, 10, 36, 6),
+              new THREE.MeshStandardMaterial({ color: 0x00e5a0, emissive: 0x00aa66, emissiveIntensity: 0.6, metalness: 0.5, roughness: 0.3 })
             );
-            core.rotation.x = Math.PI / 2;
-            g.add(core);
-            const disc = new THREE.Mesh(
-              new THREE.CircleGeometry(22, 6),
-              new THREE.MeshBasicMaterial({ color: 0x003322, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+            tower.rotation.x = Math.PI / 2;
+            tower.position.z = 18;
+            g.add(tower);
+            // Antenna
+            const ant = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.6, 0.6, 20, 6),
+              new THREE.MeshStandardMaterial({ color: 0x88ffcc, emissive: 0x44ffaa, emissiveIntensity: 1 })
             );
-            disc.position.z = -2;
-            g.add(disc);
+            ant.rotation.x = Math.PI / 2;
+            ant.position.z = 42;
+            g.add(ant);
+            // Landing arms
+            for (let i = 0; i < 6; i++) {
+              const a = (i / 6) * Math.PI * 2;
+              const arm = new THREE.Mesh(
+                new THREE.BoxGeometry(28, 2, 2),
+                new THREE.MeshStandardMaterial({ color: 0x00aa77, emissive: 0x006644, emissiveIntensity: 0.3 })
+              );
+              arm.position.set(Math.cos(a) * 35, Math.sin(a) * 35, 2);
+              arm.rotation.z = a;
+              g.add(arm);
+            }
+            // Point light
+            const pl = new THREE.PointLight(0x00e5a0, 1.2, 400);
+            pl.position.z = 25;
+            g.add(pl);
           } else if (type === 'dock') {
             const pad = new THREE.Mesh(
-              new THREE.RingGeometry(28, 48, 32),
-              new THREE.MeshBasicMaterial({ color: 0x44aaff, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+              new THREE.CylinderGeometry(36, 42, 3, 32),
+              new THREE.MeshStandardMaterial({ color: 0x0a1830, metalness: 0.6, roughness: 0.35, emissive: 0x112244, emissiveIntensity: 0.2 })
             );
-            pad.position.z = -4;
+            pad.rotation.x = Math.PI / 2;
             g.add(pad);
-            const inner = new THREE.Mesh(
-              new THREE.RingGeometry(10, 18, 32),
-              new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
-            );
-            inner.position.z = -3;
-            g.add(inner);
-            const tower = new THREE.Mesh(
-              new THREE.BoxGeometry(6, 6, 14),
-              new THREE.MeshStandardMaterial({ color: 0x4488cc, emissive: 0x2244aa, emissiveIntensity: 0.4, metalness: 0.5, roughness: 0.4 })
-            );
-            tower.position.z = 4;
-            g.add(tower);
-          } else {
-            // control center
-            const diamond = new THREE.Mesh(
-              new THREE.OctahedronGeometry(16, 0),
-              new THREE.MeshStandardMaterial({ color: 0xb06aff, emissive: 0x8020ff, emissiveIntensity: 0.55, metalness: 0.3, roughness: 0.4 })
-            );
-            g.add(diamond);
             const ring = new THREE.Mesh(
-              new THREE.RingGeometry(22, 30, 24),
-              new THREE.MeshBasicMaterial({ color: 0xb06aff, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+              new THREE.TorusGeometry(34, 1.4, 8, 48),
+              new THREE.MeshStandardMaterial({ color: 0x44aaff, emissive: 0x2266cc, emissiveIntensity: 0.9 })
             );
-            ring.position.z = -3;
+            ring.position.z = 2;
             g.add(ring);
+            const cross1 = new THREE.Mesh(new THREE.BoxGeometry(40, 2.5, 1.2),
+              new THREE.MeshStandardMaterial({ color: 0x88ccff, emissive: 0x4488ff, emissiveIntensity: 0.5 }));
+            cross1.position.z = 2.5;
+            g.add(cross1);
+            const cross2 = cross1.clone();
+            cross2.rotation.z = Math.PI / 2;
+            g.add(cross2);
+            // Control tower
+            const tower = new THREE.Mesh(
+              new THREE.BoxGeometry(6, 6, 18),
+              new THREE.MeshStandardMaterial({ color: 0x3355aa, emissive: 0x2233aa, emissiveIntensity: 0.4, metalness: 0.5, roughness: 0.35 })
+            );
+            tower.position.set(22, 0, 10);
+            g.add(tower);
+            const pl = new THREE.PointLight(0x44aaff, 0.9, 280);
+            pl.position.z = 12;
+            g.add(pl);
+          } else {
+            // Control center
+            const core = new THREE.Mesh(
+              new THREE.OctahedronGeometry(14, 0),
+              new THREE.MeshStandardMaterial({ color: 0xb06aff, emissive: 0x8020ff, emissiveIntensity: 0.75, metalness: 0.35, roughness: 0.35 })
+            );
+            core.position.z = 10;
+            g.add(core);
+            const ring = new THREE.Mesh(
+              new THREE.TorusGeometry(20, 1.2, 8, 32),
+              new THREE.MeshStandardMaterial({ color: 0xd0a0ff, emissive: 0x8844cc, emissiveIntensity: 0.8 })
+            );
+            ring.position.z = 4;
+            g.add(ring);
+            const ring2 = ring.clone();
+            ring2.scale.setScalar(0.7);
+            ring2.rotation.x = Math.PI / 3;
+            ring2.position.z = 12;
+            g.add(ring2);
+            const base = new THREE.Mesh(
+              new THREE.CylinderGeometry(16, 18, 3, 6),
+              new THREE.MeshStandardMaterial({ color: 0x2a1848, metalness: 0.5, roughness: 0.4 })
+            );
+            base.rotation.x = Math.PI / 2;
+            g.add(base);
+            const pl = new THREE.PointLight(0xb06aff, 1.1, 350);
+            pl.position.z = 16;
+            g.add(pl);
           }
           g.visible = false;
           state.scene.add(g);
@@ -278,7 +432,7 @@
         // Composer + bloom
         const composer = new EffectComposer(state.renderer);
         composer.addPass(new RenderPass(state.scene, state.camera));
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.85, 0.4, 0.2);
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.15, 0.5, 0.18);
         composer.addPass(bloom);
         state.composer = composer;
 

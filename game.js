@@ -1050,36 +1050,111 @@
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(p.angle);
-    ctx.fillStyle = '#00c8ff';
+    const thrust = (G.keys['KeyW'] || G.keys['ArrowUp']) && G.fuel > 0 ? 1 : 0.15;
+    const cargoFill = maxCargo() > 0 ? G.ore / maxCargo() : 0;
+
+    // Wings (back)
+    ctx.fillStyle = '#0a6a8a';
     ctx.shadowColor = '#00c8ff';
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 8;
     ctx.beginPath();
-    ctx.moveTo(16, 0);
-    ctx.lineTo(-10, -9);
-    ctx.lineTo(-6, 0);
-    ctx.lineTo(-10, 9);
+    ctx.moveTo(-4, 0); ctx.lineTo(-14, -18); ctx.lineTo(-2, -11); ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-4, 0); ctx.lineTo(-14, 18); ctx.lineTo(-2, 11); ctx.closePath();
+    ctx.fill();
+    // Wing tips
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillRect(-14, -19, 3, 4);
+    ctx.fillRect(-14, 15, 3, 4);
+
+    // Cargo hull (belly)
+    ctx.fillStyle = `rgb(${40 + cargoFill * 80},${50 + cargoFill * 40},${60})`;
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(-16, -7); ctx.lineTo(-4, -8); ctx.lineTo(-4, 8); ctx.lineTo(-16, 7);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#00ffff';
+    ctx.strokeStyle = cargoFill > 0.5 ? '#ffc846' : '#3a4a58';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Cargo stripes
+    ctx.fillStyle = cargoFill > 0.01 ? `rgba(255,200,70,${0.3 + cargoFill * 0.6})` : '#222';
+    for (let i = 0; i < 3; i++) ctx.fillRect(-14 + i * 3.2, -5.5, 1.5, 11);
+
+    // Main fuselage
+    ctx.fillStyle = '#1a9ec4';
+    ctx.shadowColor = '#00c8ff';
+    ctx.shadowBlur = 14;
     ctx.beginPath();
-    ctx.arc(4, 0, 3.5, 0, Math.PI * 2);
+    ctx.moveTo(20, 0);
+    ctx.lineTo(6, -6);
+    ctx.lineTo(-6, -5);
+    ctx.lineTo(-8, 0);
+    ctx.lineTo(-6, 5);
+    ctx.lineTo(6, 6);
+    ctx.closePath();
     ctx.fill();
-    // Shield ring when active
+
+    // Nose accent
+    ctx.fillStyle = '#00e5ff';
+    ctx.beginPath();
+    ctx.moveTo(20, 0); ctx.lineTo(10, -3.5); ctx.lineTo(10, 3.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Cockpit
+    ctx.fillStyle = '#aaffff';
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.ellipse(6, -1, 4, 2.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Dorsal fin
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#0a6a8a';
+    ctx.beginPath();
+    ctx.moveTo(-2, -5); ctx.lineTo(-8, -14); ctx.lineTo(-4, -5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Running lights
+    ctx.fillStyle = '#00ffaa';
+    ctx.shadowColor = '#00ffaa';
+    ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.arc(8, -5, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(8, 5, 1.5, 0, Math.PI * 2); ctx.fill();
+
+    // Shield
     if (G.shield > 0) {
       const sp = G.shield / maxShield();
-      ctx.strokeStyle = `rgba(68,170,255,${0.25 + sp * 0.45})`;
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = `rgba(68,170,255,${0.2 + sp * 0.5})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 0, 20, 0, Math.PI * 2);
+      ctx.arc(0, 0, 24, 0, Math.PI * 2);
       ctx.stroke();
     }
-    const thrust = (G.keys['KeyW'] || G.keys['ArrowUp']) && G.fuel > 0 ? 1 : 0.2;
-    ctx.fillStyle = `rgba(255,107,53,${0.5 + thrust * 0.5})`;
+
+    // Main thruster plume
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = `rgba(255,100,40,${0.45 + thrust * 0.5})`;
     ctx.beginPath();
-    ctx.moveTo(-10, -4);
-    ctx.lineTo(-10 - 8 * thrust - Math.random() * 4, 0);
-    ctx.lineTo(-10, 4);
+    ctx.moveTo(-16, -5);
+    ctx.lineTo(-16 - 10 * thrust - Math.random() * 5, 0);
+    ctx.lineTo(-16, 5);
+    ctx.closePath();
     ctx.fill();
+    if (thrust > 0.5) {
+      ctx.fillStyle = 'rgba(255,220,120,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(-16, -2.5);
+      ctx.lineTo(-16 - 6 * thrust, 0);
+      ctx.lineTo(-16, 2.5);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.restore();
   }
 

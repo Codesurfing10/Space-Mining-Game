@@ -28,6 +28,12 @@ Then open the local URL and click **LAUNCH MISSION**.
 | **Shift** | Emergency brake |
 | **Esc** | Pause / close shop |
 
+## Features (v5.3 — complex bases + ship redesign
+
+- Detailed ship: swept wings, cargo hull with load glow, dual engine pods, dorsal fin
+- HQ tower complex, docking pads with towers, control centers with octahedron cores
+- Nebula clouds, denser starfield, stronger bloom and lighting
+
 ## Features (v5.2 — dynamic ops)
 
 ### Dashboard & payments
