@@ -175,49 +175,45 @@
 
   function initStations() {
     const cx = CFG.world.w / 2, cy = CFG.world.h / 2;
+    // One large Star Wars-style station complex: HQ core + attached docks + control tower
     G.stations = [
       {
-        id: 'hq', type: 'hq', name: 'A·R·I·A HQ',
-        x: cx, y: cy, r: 78, z: 0,
+        id: 'hq', type: 'hq', name: 'COMMAND DECK',
+        x: cx, y: cy, r: 140, z: 0,
         services: { repair: true, refuel: true, shield: true, sell: true, shop: true },
-        color: '#00e5a0', accent: '#00c8ff', pulse: 0
+        color: '#5eead4', accent: '#22d3ee', pulse: 0
       },
       {
-        id: 'dock-alpha', type: 'dock', name: 'Dock Alpha',
-        x: cx - 900, y: cy - 650, r: 52, z: 0,
+        id: 'dock-port', type: 'dock', name: 'PORT HANGAR',
+        x: cx - 220, y: cy - 40, r: 70, z: 0,
+        services: { repair: true, refuel: true, shield: true, sell: true, shop: false },
+        color: '#38bdf8', accent: '#7dd3fc', pulse: 0.5, armFrom: 'hq'
+      },
+      {
+        id: 'dock-starboard', type: 'dock', name: 'STARBOARD HANGAR',
+        x: cx + 220, y: cy - 40, r: 70, z: 0,
+        services: { repair: true, refuel: true, shield: true, sell: true, shop: false },
+        color: '#38bdf8', accent: '#7dd3fc', pulse: 1.2, armFrom: 'hq'
+      },
+      {
+        id: 'dock-aft', type: 'dock', name: 'AFT HANGAR',
+        x: cx, y: cy + 230, r: 65, z: 0,
         services: { repair: false, refuel: true, shield: true, sell: true, shop: false },
-        color: '#44aaff', accent: '#88ccff', pulse: 0.7
+        color: '#38bdf8', accent: '#7dd3fc', pulse: 2.0, armFrom: 'hq'
       },
       {
-        id: 'dock-beta', type: 'dock', name: 'Dock Beta',
-        x: cx + 980, y: cy - 420, r: 52, z: 0,
-        services: { repair: false, refuel: true, shield: true, sell: true, shop: false },
-        color: '#44aaff', accent: '#88ccff', pulse: 1.4
-      },
-      {
-        id: 'dock-gamma', type: 'dock', name: 'Dock Gamma',
-        x: cx - 200, y: cy + 980, r: 52, z: 0,
-        services: { repair: true, refuel: true, shield: false, sell: true, shop: false },
-        color: '#44aaff', accent: '#88ccff', pulse: 2.1
-      },
-      {
-        id: 'cc-north', type: 'control', name: 'Control North',
-        x: cx + 700, y: cy + 780, r: 44, z: 0,
+        id: 'tower', type: 'control', name: 'CONTROL TOWER',
+        x: cx + 30, y: cy - 160, r: 55, z: 0,
         services: { repair: false, refuel: false, shield: false, sell: false, shop: false, intel: true },
-        color: '#b06aff', accent: '#d0a0ff', pulse: 0.3
-      },
-      {
-        id: 'cc-west', type: 'control', name: 'Control West',
-        x: cx - 1100, y: cy + 200, r: 44, z: 0,
-        services: { repair: false, refuel: false, shield: false, sell: false, shop: false, intel: true },
-        color: '#b06aff', accent: '#d0a0ff', pulse: 1.9
+        color: '#c084fc', accent: '#e9d5ff', pulse: 0.8, armFrom: 'hq'
       }
     ];
     G.base = G.stations[0];
     G.activeStation = null;
+    G.baseComplex = { cx, cy, r: 320 }; // overall footprint for radar/draw
   }
 
-  function nearestStation(maxExtra = 50) {
+    function nearestStation(maxExtra = 80) {
     let best = null, bestD = Infinity;
     for (const s of G.stations) {
       const d = dist(G.player, s) - s.r;
@@ -227,9 +223,14 @@
     return null;
   }
 
-  function stationInRange(s, pad = 40) {
+  function stationInRange(s, pad = 55) {
     return s && dist(G.player, s) < s.r + pad;
   }
+
+  function getStation(id) {
+    return G.stations.find(s => s.id === id);
+  }
+
 
   // ─── DOM ──────────────────────────────────────────────────────────────────
   const canvas = document.getElementById('gameCanvas');
@@ -1168,394 +1169,178 @@
     ctx.fillStyle = 'rgba(2,13,24,0.15)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Stations: HQ, docks, control centers
+    // ── STAR WARS-STYLE BASE COMPLEX ─────────────────────────────────────
     if (!G.stations || G.stations.length === 0) initStations();
+    const hq = G.stations.find(s => s.type === 'hq') || G.stations[0];
+    if (hq) {
+      const hc = worldToScreen(hq.x, hq.y);
+      // Connecting arms from HQ to each attached module
+      for (const st of G.stations) {
+        if (st === hq) continue;
+        const sc = worldToScreen(st.x, st.y);
+        ctx.strokeStyle = 'rgba(100,180,220,0.35)';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.moveTo(hc.x, hc.y);
+        ctx.lineTo(sc.x, sc.y);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(56,189,248,0.55)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(hc.x, hc.y);
+        ctx.lineTo(sc.x, sc.y);
+        ctx.stroke();
+        // Arm segment panels
+        const mx = (hc.x + sc.x) / 2, my = (hc.y + sc.y) / 2;
+        ctx.fillStyle = 'rgba(15,40,60,0.7)';
+        ctx.fillRect(mx - 8, my - 8, 16, 16);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(mx - 8, my - 8, 16, 16);
+      }
+    }
+
     for (const st of G.stations) {
       const s = worldToScreen(st.x, st.y);
       const active = G.docking && G.activeStation === st;
-      const near = stationInRange(st, 55);
-      const pulse = 0.5 + 0.5 * Math.sin((st.pulse || 0) * 2.2);
-      const col = st.color || '#00e5a0';
+      const near = stationInRange(st, 60);
+      const pulse = 0.5 + 0.5 * Math.sin((st.pulse || 0) * 2.5 + G.t);
+      const col = st.color || '#5eead4';
 
-      // Outer soft glow (always visible)
-      ctx.globalAlpha = active ? 0.22 : near ? 0.16 : 0.10;
+      // Large soft glow
+      ctx.globalAlpha = active ? 0.25 : near ? 0.18 : 0.12;
       ctx.fillStyle = col;
       ctx.beginPath();
-      ctx.arc(s.x, s.y, st.r + 22 + pulse * 8, 0, Math.PI * 2);
+      ctx.arc(s.x, s.y, st.r + 28 + pulse * 10, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 1;
-      // Solid outer ring so base is never invisible
-      ctx.strokeStyle = active ? '#ffc846' : col;
-      ctx.lineWidth = active ? 4 : 2.5;
-      ctx.globalAlpha = 0.9;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, st.r, 0, Math.PI * 2);
-      ctx.stroke();
       ctx.globalAlpha = 1;
 
       if (st.type === 'hq') {
-        // Hex ring
+        // Massive octagonal command deck
+        const sides = 8;
+        ctx.fillStyle = 'rgba(8,30,40,0.75)';
         ctx.strokeStyle = active ? '#ffc846' : col;
-        ctx.lineWidth = active ? 3 : 2;
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * Math.PI * 2 - Math.PI / 2 + (G.t || 0) * 0.15;
+        for (let i = 0; i < sides; i++) {
+          const a = (i / sides) * Math.PI * 2 - Math.PI / 8 + G.t * 0.05;
           const rr = st.r;
           const px = s.x + Math.cos(a) * rr, py = s.y + Math.sin(a) * rr;
           i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
         }
         ctx.closePath();
+        ctx.fill();
         ctx.stroke();
-        // Inner hex
-        ctx.globalAlpha = 0.35;
+        // Inner deck
+        ctx.strokeStyle = 'rgba(34,211,238,0.7)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * Math.PI * 2 - Math.PI / 2 - (G.t || 0) * 0.1;
-          const rr = st.r * 0.55;
+        for (let i = 0; i < sides; i++) {
+          const a = (i / sides) * Math.PI * 2 - Math.PI / 8 - G.t * 0.08;
+          const rr = st.r * 0.62;
           const px = s.x + Math.cos(a) * rr, py = s.y + Math.sin(a) * rr;
           i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
         }
         ctx.closePath();
         ctx.stroke();
-        ctx.globalAlpha = 1;
-        // Core
+        // Core reactor glow
         ctx.fillStyle = col;
         ctx.shadowColor = col;
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 20;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, 8, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, 14 + pulse * 4, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
-        // Spokes
-        ctx.strokeStyle = 'rgba(0,229,160,0.35)';
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * Math.PI * 2 + (G.t || 0) * 0.15;
-          ctx.beginPath();
-          ctx.moveTo(s.x + Math.cos(a) * 12, s.y + Math.sin(a) * 12);
-          ctx.lineTo(s.x + Math.cos(a) * (st.r - 6), s.y + Math.sin(a) * (st.r - 6));
-          ctx.stroke();
+        ctx.fillStyle = '#ecfeff';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // Turbolaser-style edge turrets
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + G.t * 0.05;
+          const tx = s.x + Math.cos(a) * (st.r - 12);
+          const ty = s.y + Math.sin(a) * (st.r - 12);
+          ctx.fillStyle = '#22d3ee';
+          ctx.fillRect(tx - 4, ty - 4, 8, 8);
         }
       } else if (st.type === 'dock') {
-        // Landing pad: double ring + cross
+        // Rectangular hangar bay (Star Destroyer docking feel)
+        const w = st.r * 1.6, h = st.r * 1.1;
+        ctx.fillStyle = 'rgba(10,25,45,0.8)';
+        ctx.fillRect(s.x - w / 2, s.y - h / 2, w, h);
         ctx.strokeStyle = active ? '#ffc846' : col;
-        ctx.lineWidth = active ? 2.5 : 1.5;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, st.r, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, st.r * 0.65, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        // Pad cross
-        ctx.strokeStyle = active ? '#ffc846' : 'rgba(68,170,255,0.55)';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(s.x - w / 2, s.y - h / 2, w, h);
+        // Inner hangar mouth
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(s.x - w * 0.28, s.y - h * 0.28, w * 0.56, h * 0.56);
+        ctx.strokeStyle = 'rgba(125,211,252,0.8)';
         ctx.lineWidth = 2;
-        const c = st.r * 0.4;
-        ctx.beginPath();
-        ctx.moveTo(s.x - c, s.y); ctx.lineTo(s.x + c, s.y);
-        ctx.moveTo(s.x, s.y - c); ctx.lineTo(s.x, s.y + c);
-        ctx.stroke();
-        // Corner brackets
-        const b = st.r * 0.72;
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 2;
-        const corners = [[-1,-1],[1,-1],[1,1],[-1,1]];
-        for (const [ox, oy] of corners) {
+        ctx.strokeRect(s.x - w * 0.28, s.y - h * 0.28, w * 0.56, h * 0.56);
+        // Approach lights
+        for (let i = -2; i <= 2; i++) {
+          ctx.fillStyle = (Math.floor(G.t * 4 + i) % 2 === 0) ? '#fbbf24' : '#38bdf8';
           ctx.beginPath();
-          ctx.moveTo(s.x + ox * b, s.y + oy * (b - 10));
-          ctx.lineTo(s.x + ox * b, s.y + oy * b);
-          ctx.lineTo(s.x + ox * (b - 10), s.y + oy * b);
+          ctx.arc(s.x + i * 14, s.y + h / 2 + 6, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Corner brackets
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2.5;
+        const bw = w / 2 - 4, bh = h / 2 - 4;
+        for (const [sx, sy] of [[-1,-1],[1,-1],[1,1],[-1,1]]) {
+          ctx.beginPath();
+          ctx.moveTo(s.x + sx * bw, s.y + sy * (bh - 12));
+          ctx.lineTo(s.x + sx * bw, s.y + sy * bh);
+          ctx.lineTo(s.x + sx * (bw - 12), s.y + sy * bh);
           ctx.stroke();
         }
       } else if (st.type === 'control') {
-        // Diamond + radar sweeps
-        ctx.save();
-        ctx.translate(s.x, s.y);
-        ctx.rotate((G.t || 0) * 0.4);
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, -st.r); ctx.lineTo(st.r * 0.7, 0); ctx.lineTo(0, st.r); ctx.lineTo(-st.r * 0.7, 0);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-        // Sweep arc
-        ctx.strokeStyle = `rgba(176,106,255,${0.25 + pulse * 0.35})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, st.r + 10, (G.t || 0) * 1.5, (G.t || 0) * 1.5 + 1.2);
-        ctx.stroke();
+        // Tall control tower silhouette
+        ctx.fillStyle = 'rgba(30,15,50,0.85)';
+        ctx.fillRect(s.x - 18, s.y - st.r, 36, st.r * 1.6);
+        ctx.strokeStyle = active ? '#ffc846' : col;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(s.x - 18, s.y - st.r, 36, st.r * 1.6);
+        // Tower top dish
         ctx.fillStyle = col;
         ctx.shadowColor = col;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 16;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y - st.r, 16 + pulse * 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
+        ctx.strokeStyle = `rgba(233,213,255,${0.4 + pulse * 0.4})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y - st.r, 24, G.t * 2, G.t * 2 + 1.5);
+        ctx.stroke();
+        // Windows
+        ctx.fillStyle = '#e9d5ff';
+        for (let i = 0; i < 4; i++) {
+          ctx.fillRect(s.x - 10, s.y - st.r + 28 + i * 16, 20, 6);
+        }
       }
 
-      // Dock progress ring
       if (active && G.dockProgress > 0) {
         ctx.strokeStyle = '#ffc846';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 5;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, st.r + 10, -Math.PI / 2, -Math.PI / 2 + G.dockProgress * Math.PI * 2);
+        ctx.arc(s.x, s.y, st.r + 14, -Math.PI / 2, -Math.PI / 2 + G.dockProgress * Math.PI * 2);
         ctx.stroke();
       }
 
-      // Label
-      ctx.font = '11px Courier New';
+      ctx.font = 'bold 12px Courier New';
       ctx.textAlign = 'center';
       ctx.fillStyle = active ? '#ffc846' : col;
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 4;
       let label = st.name;
       if (active) label = 'DOCKING…';
       else if (near && st.type === 'control') label = st.name + '  [R] LINK';
       else if (near) label = st.name + '  [R] DOCK';
-      ctx.fillText(label, s.x, s.y + st.r + 16);
-    }
-
-    for (const a of G.asteroids) {
-      const s = worldToScreen(a.x, a.y);
-      const orePct = a.ore / a.maxOre;
-      ctx.save();
-      ctx.translate(s.x, s.y);
-      ctx.rotate(a.angle);
-      ctx.fillStyle = `rgba(180,150,80,${0.35 + orePct * 0.4})`;
-      ctx.strokeStyle = '#c0a060';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      for (let i = 0; i < 7; i++) {
-        const ang = (i / 7) * Math.PI * 2;
-        const rr = a.r * (0.75 + Math.sin(i * 2.3) * 0.25);
-        i === 0 ? ctx.moveTo(Math.cos(ang) * rr, Math.sin(ang) * rr)
-                : ctx.lineTo(Math.cos(ang) * rr, Math.sin(ang) * rr);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-      if (a === G.miningTarget) {
-        ctx.strokeStyle = '#00e5a0';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, a.r + 8, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    }
-
-    for (const d of G.debris) {
-      const s = worldToScreen(d.x, d.y);
-      ctx.save();
-      ctx.translate(s.x, s.y);
-      ctx.rotate(d.angle);
-      ctx.fillStyle = d.rarity > 1.5 ? '#ffc846' : '#8af';
-      ctx.strokeStyle = d.rarity > 1.5 ? '#ffc846' : '#b06aff';
-      ctx.lineWidth = 1;
-      ctx.fillRect(-d.r * 0.7, -d.r * 0.5, d.r * 1.4, d.r);
-      ctx.strokeRect(-d.r * 0.7, -d.r * 0.5, d.r * 1.4, d.r);
-      ctx.restore();
-    }
-
-    for (const m of G.mines) {
-      const s = worldToScreen(m.x, m.y);
-      const pulse = 0.5 + Math.sin(m.pulse) * 0.5;
-      ctx.strokeStyle = `rgba(255,64,96,${0.3 + pulse * 0.4})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, m.triggerR, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = `rgb(255,${40 + pulse * 40},${60 + pulse * 40})`;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, m.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    for (const dr of G.drones) {
-      const s = worldToScreen(dr.x, dr.y);
-      ctx.save();
-      ctx.translate(s.x, s.y);
-      ctx.rotate(dr.angle);
-      ctx.fillStyle = '#ff4060';
-      ctx.shadowColor = '#ff4060';
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.moveTo(12, 0);
-      ctx.lineTo(-8, -7);
-      ctx.lineTo(-4, 0);
-      ctx.lineTo(-8, 7);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillText(label, s.x, s.y + st.r + 20);
       ctx.shadowBlur = 0;
-      ctx.fillStyle = '#333';
-      ctx.fillRect(-10, -16, 20, 3);
-      ctx.fillStyle = '#ff4060';
-      ctx.fillRect(-10, -16, 20 * (dr.hp / dr.maxHp), 3);
-      ctx.restore();
-    }
-
-    for (const n of G.nets) {
-      const cx = n.x + (n.tx - n.x) * n.progress;
-      const cy = n.y + (n.ty - n.y) * n.progress;
-      const s = worldToScreen(cx, cy);
-      ctx.strokeStyle = `rgba(0,229,160,${n.life})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, n.radius * n.progress, 0, Math.PI * 2);
-      ctx.stroke();
-      for (let k = 0; k < 6; k++) {
-        const a = (k / 6) * Math.PI * 2 + G.t * 2;
-        ctx.beginPath();
-        ctx.moveTo(s.x, s.y);
-        ctx.lineTo(s.x + Math.cos(a) * n.radius * n.progress, s.y + Math.sin(a) * n.radius * n.progress);
-        ctx.stroke();
-      }
-    }
-
-    for (const L of G.lasers) {
-      const s = worldToScreen(L.x, L.y);
-      ctx.strokeStyle = L.enemy ? '#ff4060' : '#00c8ff';
-      ctx.lineWidth = 2;
-      ctx.shadowColor = ctx.strokeStyle;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(s.x - L.vx * 0.02, s.y - L.vy * 0.02);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    for (const P of G.particles) {
-      const s = worldToScreen(P.x, P.y);
-      const alpha = P.life / P.maxLife;
-      ctx.fillStyle = P.color;
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, P.r * alpha, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-
-    for (const f of G.floatingText) {
-      const s = worldToScreen(f.x, f.y);
-      ctx.globalAlpha = Math.max(0, f.life);
-      ctx.fillStyle = f.color;
-      ctx.font = 'bold 13px Courier New';
-      ctx.textAlign = 'center';
-      ctx.fillText(f.text, s.x, s.y);
-      ctx.globalAlpha = 1;
-    }
-
-    if (G.running) drawShip(G.player);
-
-    if (G.running && !G.paused) {
-      ctx.strokeStyle = 'rgba(0,200,255,0.7)';
-      ctx.lineWidth = 1;
-      const mx = G.mouse.x, my = G.mouse.y;
-      ctx.beginPath();
-      ctx.moveTo(mx - 10, my); ctx.lineTo(mx - 3, my);
-      ctx.moveTo(mx + 3, my); ctx.lineTo(mx + 10, my);
-      ctx.moveTo(mx, my - 10); ctx.lineTo(mx, my - 3);
-      ctx.moveTo(mx, my + 3); ctx.lineTo(mx, my + 10);
-      ctx.stroke();
-    }
-
-    if (G.running) drawHUD();
-  }
-  window.render = render;
-
-  function drawBar(x, y, w, h, pct, color, label) {
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-    ctx.fillStyle = 'rgba(0,30,50,0.9)';
-    ctx.fillRect(x, y, w, h);
-    const p = clamp(pct, 0, 1);
-    if (p > 0) {
-      ctx.fillStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      ctx.fillRect(x, y, w * p, h);
-      ctx.shadowBlur = 0;
-    }
-    ctx.strokeStyle = 'rgba(0,200,255,0.35)';
-    ctx.strokeRect(x, y, w, h);
-    if (label) {
-      ctx.fillStyle = 'rgba(180,230,255,0.8)';
-      ctx.font = '10px Courier New';
-      ctx.textAlign = 'left';
-      ctx.fillText(label, x, y - 4);
-      ctx.fillStyle = 'rgba(180,230,255,0.5)';
-      ctx.textAlign = 'right';
-      ctx.fillText(Math.round(p * 100) + '%', x + w, y - 4);
-      ctx.textAlign = 'left';
-    }
-  }
-
-  function drawHUD() {
-    updateLiveDash();
-    const pad = 14;
-
-    // Bars only (score/tokens live in HTML dashboard)
-    const bw = 168, bh = 10;
-    let by = canvas.height - pad - 6;
-    drawBar(pad, by - bh, bw, bh, G.hull / CFG.player.maxHull,
-      G.hull > 40 ? '#00e5a0' : G.hull > 20 ? '#ffc846' : '#ff4060', 'HULL');
-    by -= 24;
-    drawBar(pad, by - bh, bw, bh, G.shield / maxShield(), '#4488ff', 'SHIELD');
-    by -= 24;
-    drawBar(pad, by - bh, bw, bh, G.fuel / maxFuel(),
-      G.fuel > 25 ? '#ffaa33' : '#ff4060', 'FUEL');
-    by -= 24;
-    drawBar(pad, by - bh, bw, bh, G.ore / maxCargo(), '#c0a060', 'CARGO');
-
-    const cx = canvas.width - pad - 120;
-    ctx.font = '11px Courier New';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = G.cooldowns.laser > 0 ? 'rgba(180,230,255,0.45)' : 'rgba(0,200,255,0.85)';
-    ctx.fillText(`LASER ${G.cooldowns.laser > 0 ? G.cooldowns.laser.toFixed(1) + 's' : 'RDY'}`, cx, pad + 48);
-    ctx.fillStyle = G.cooldowns.net > 0 ? 'rgba(180,230,255,0.45)' : 'rgba(0,229,160,0.85)';
-    ctx.fillText(`NET   ${G.cooldowns.net > 0 ? G.cooldowns.net.toFixed(1) + 's' : 'RDY'}`, cx, pad + 64);
-    if (G.miningTarget) {
-      ctx.fillStyle = '#00e5a0';
-      ctx.fillText('◉ MINING', cx, pad + 80);
-    }
-    if (G.fuel < 15) {
-      ctx.fillStyle = '#ff4060';
-      ctx.fillText('LOW FUEL', cx, pad + 96);
-    }
-
-    // Improved radar / minimap
-    const mw = 140, mh = 140;
-    const mx = canvas.width - pad - mw;
-    const my = canvas.height - pad - mh;
-    ctx.fillStyle = 'rgba(0,15,30,0.72)';
-    ctx.fillRect(mx, my, mw, mh);
-    ctx.strokeStyle = 'rgba(0,200,255,0.4)';
-    ctx.strokeRect(mx, my, mw, mh);
-
-    // Range rings
-    const sx = mw / CFG.world.w;
-    const sy = mh / CFG.world.h;
-    const prx = mx + G.player.x * sx;
-    const pry = my + G.player.y * sy;
-    ctx.strokeStyle = 'rgba(0,200,255,0.12)';
-    ctx.lineWidth = 1;
-    for (const ring of [200, 500, 1000]) {
-      ctx.beginPath();
-      ctx.ellipse(prx, pry, ring * sx, ring * sy, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-        // Stations on radar
-    for (const st of G.stations) {
-      const color = st.type === 'hq' ? '#00e5a0' : st.type === 'dock' ? '#44aaff' : '#b06aff';
-      const rad = st.type === 'hq' ? 4 : 3;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(mx + st.x * sx, my + st.y * sy, rad, 0, Math.PI * 2);
-      ctx.fill();
     }
 
     // Asteroids (brown)
@@ -1955,8 +1740,8 @@
       miningSpeed: 0, laserDamage: 0, netRadius: 0,
       enginePower: 0, cargoCap: 0, shieldMax: 0, fuelTank: 0
     };
-    G.player.x = CFG.world.w / 2 + 120;
-    G.player.y = CFG.world.h / 2 + 80;
+    G.player.x = CFG.world.w / 2 - 180;
+    G.player.y = CFG.world.h / 2 - 20;
     G.player.vx = 0;
     G.player.vy = 0;
     G.player.angle = 0;

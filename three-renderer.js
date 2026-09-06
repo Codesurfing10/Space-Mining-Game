@@ -311,121 +311,106 @@
         function makeStationMesh(type) {
           const g = new THREE.Group();
           if (type === 'hq') {
-            // Multi-level HQ complex
-            const padMat = new THREE.MeshStandardMaterial({
-              color: 0x0a3020, metalness: 0.5, roughness: 0.4,
-              emissive: 0x00e5a0, emissiveIntensity: 0.15
-            });
-            const pad = new THREE.Mesh(new THREE.CylinderGeometry(70, 78, 4, 6), padMat);
-            pad.rotation.x = Math.PI / 2;
-            g.add(pad);
-            const ring = new THREE.Mesh(
-              new THREE.TorusGeometry(62, 1.8, 8, 6),
-              new THREE.MeshStandardMaterial({ color: 0x00e5a0, emissive: 0x00e5a0, emissiveIntensity: 0.8 })
+            // Large command deck platform
+            const deck = new THREE.Mesh(
+              new THREE.CylinderGeometry(120, 130, 8, 8),
+              new THREE.MeshStandardMaterial({
+                color: 0x0a2830, metalness: 0.6, roughness: 0.35,
+                emissive: 0x0a4038, emissiveIntensity: 0.35
+              })
             );
-            ring.position.z = 3;
+            deck.rotation.x = Math.PI / 2;
+            g.add(deck);
+            const ring = new THREE.Mesh(
+              new THREE.TorusGeometry(115, 3, 8, 8),
+              new THREE.MeshStandardMaterial({ color: 0x5eead4, emissive: 0x2dd4bf, emissiveIntensity: 1.1 })
+            );
+            ring.position.z = 5;
             g.add(ring);
             const ring2 = new THREE.Mesh(
-              new THREE.TorusGeometry(40, 1.2, 8, 6),
-              new THREE.MeshStandardMaterial({ color: 0x00c8ff, emissive: 0x00c8ff, emissiveIntensity: 0.7 })
+              new THREE.TorusGeometry(70, 2, 8, 8),
+              new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0891b2, emissiveIntensity: 0.9 })
             );
-            ring2.position.z = 5;
+            ring2.position.z = 8;
             g.add(ring2);
-            // Central tower
-            const tower = new THREE.Mesh(
-              new THREE.CylinderGeometry(6, 10, 36, 6),
-              new THREE.MeshStandardMaterial({ color: 0x00e5a0, emissive: 0x00aa66, emissiveIntensity: 0.6, metalness: 0.5, roughness: 0.3 })
+            // Superstructure
+            const keep = new THREE.Mesh(
+              new THREE.BoxGeometry(50, 40, 28),
+              new THREE.MeshStandardMaterial({ color: 0x1a3a48, metalness: 0.55, roughness: 0.3, emissive: 0x0a2028, emissiveIntensity: 0.3 })
             );
-            tower.rotation.x = Math.PI / 2;
-            tower.position.z = 18;
-            g.add(tower);
-            // Antenna
-            const ant = new THREE.Mesh(
-              new THREE.CylinderGeometry(0.6, 0.6, 20, 6),
-              new THREE.MeshStandardMaterial({ color: 0x88ffcc, emissive: 0x44ffaa, emissiveIntensity: 1 })
+            keep.position.z = 22;
+            g.add(keep);
+            // Bridge tower
+            const bridge = new THREE.Mesh(
+              new THREE.BoxGeometry(22, 18, 36),
+              new THREE.MeshStandardMaterial({ color: 0x245060, metalness: 0.5, roughness: 0.28, emissive: 0x00e5a0, emissiveIntensity: 0.25 })
             );
-            ant.rotation.x = Math.PI / 2;
-            ant.position.z = 42;
-            g.add(ant);
-            // Landing arms
-            for (let i = 0; i < 6; i++) {
-              const a = (i / 6) * Math.PI * 2;
-              const arm = new THREE.Mesh(
-                new THREE.BoxGeometry(28, 2, 2),
-                new THREE.MeshStandardMaterial({ color: 0x00aa77, emissive: 0x006644, emissiveIntensity: 0.3 })
-              );
-              arm.position.set(Math.cos(a) * 35, Math.sin(a) * 35, 2);
-              arm.rotation.z = a;
-              g.add(arm);
-            }
-            // Point light
-            const pl = new THREE.PointLight(0x00e5a0, 1.2, 400);
-            pl.position.z = 25;
+            bridge.position.set(0, 0, 48);
+            g.add(bridge);
+            // Core glow
+            const core = new THREE.Mesh(
+              new THREE.SphereGeometry(12, 16, 12),
+              new THREE.MeshStandardMaterial({ color: 0x5eead4, emissive: 0x5eead4, emissiveIntensity: 1.4 })
+            );
+            core.position.z = 12;
+            g.add(core);
+            const pl = new THREE.PointLight(0x5eead4, 2.0, 600);
+            pl.position.z = 40;
             g.add(pl);
           } else if (type === 'dock') {
-            const pad = new THREE.Mesh(
-              new THREE.CylinderGeometry(36, 42, 3, 32),
-              new THREE.MeshStandardMaterial({ color: 0x0a1830, metalness: 0.6, roughness: 0.35, emissive: 0x112244, emissiveIntensity: 0.2 })
+            // Hangar box
+            const bay = new THREE.Mesh(
+              new THREE.BoxGeometry(90, 55, 12),
+              new THREE.MeshStandardMaterial({ color: 0x0c1a2e, metalness: 0.55, roughness: 0.4, emissive: 0x0a1525, emissiveIntensity: 0.25 })
             );
-            pad.rotation.x = Math.PI / 2;
-            g.add(pad);
-            const ring = new THREE.Mesh(
-              new THREE.TorusGeometry(34, 1.4, 8, 48),
-              new THREE.MeshStandardMaterial({ color: 0x44aaff, emissive: 0x2266cc, emissiveIntensity: 0.9 })
+            bay.rotation.x = Math.PI / 2;
+            g.add(bay);
+            const frame = new THREE.Mesh(
+              new THREE.BoxGeometry(70, 35, 4),
+              new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.7, metalness: 0.4, roughness: 0.3 })
             );
-            ring.position.z = 2;
-            g.add(ring);
-            const cross1 = new THREE.Mesh(new THREE.BoxGeometry(40, 2.5, 1.2),
-              new THREE.MeshStandardMaterial({ color: 0x88ccff, emissive: 0x4488ff, emissiveIntensity: 0.5 }));
-            cross1.position.z = 2.5;
-            g.add(cross1);
-            const cross2 = cross1.clone();
-            cross2.rotation.z = Math.PI / 2;
-            g.add(cross2);
-            // Control tower
-            const tower = new THREE.Mesh(
-              new THREE.BoxGeometry(6, 6, 18),
-              new THREE.MeshStandardMaterial({ color: 0x3355aa, emissive: 0x2233aa, emissiveIntensity: 0.4, metalness: 0.5, roughness: 0.35 })
+            frame.position.z = 8;
+            g.add(frame);
+            // Approach strip
+            const strip = new THREE.Mesh(
+              new THREE.BoxGeometry(8, 80, 1.5),
+              new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 1.2 })
             );
-            tower.position.set(22, 0, 10);
-            g.add(tower);
-            const pl = new THREE.PointLight(0x44aaff, 0.9, 280);
-            pl.position.z = 12;
+            strip.position.set(0, 0, 2);
+            g.add(strip);
+            const pl = new THREE.PointLight(0x38bdf8, 1.4, 400);
+            pl.position.z = 20;
             g.add(pl);
           } else {
-            // Control center
-            const core = new THREE.Mesh(
-              new THREE.OctahedronGeometry(14, 0),
-              new THREE.MeshStandardMaterial({ color: 0xb06aff, emissive: 0x8020ff, emissiveIntensity: 0.75, metalness: 0.35, roughness: 0.35 })
+            // Control tower
+            const shaft = new THREE.Mesh(
+              new THREE.BoxGeometry(22, 22, 70),
+              new THREE.MeshStandardMaterial({ color: 0x2a1848, metalness: 0.5, roughness: 0.35, emissive: 0x1a0a30, emissiveIntensity: 0.3 })
             );
-            core.position.z = 10;
-            g.add(core);
-            const ring = new THREE.Mesh(
-              new THREE.TorusGeometry(20, 1.2, 8, 32),
-              new THREE.MeshStandardMaterial({ color: 0xd0a0ff, emissive: 0x8844cc, emissiveIntensity: 0.8 })
+            shaft.position.z = 35;
+            g.add(shaft);
+            const head = new THREE.Mesh(
+              new THREE.CylinderGeometry(16, 14, 14, 8),
+              new THREE.MeshStandardMaterial({ color: 0xc084fc, emissive: 0x7c3aed, emissiveIntensity: 0.85, metalness: 0.4, roughness: 0.3 })
             );
-            ring.position.z = 4;
-            g.add(ring);
-            const ring2 = ring.clone();
-            ring2.scale.setScalar(0.7);
-            ring2.rotation.x = Math.PI / 3;
-            ring2.position.z = 12;
-            g.add(ring2);
-            const base = new THREE.Mesh(
-              new THREE.CylinderGeometry(16, 18, 3, 6),
-              new THREE.MeshStandardMaterial({ color: 0x2a1848, metalness: 0.5, roughness: 0.4 })
+            head.rotation.x = Math.PI / 2;
+            head.position.z = 72;
+            g.add(head);
+            const dish = new THREE.Mesh(
+              new THREE.SphereGeometry(10, 12, 8),
+              new THREE.MeshStandardMaterial({ color: 0xe9d5ff, emissive: 0xc084fc, emissiveIntensity: 1.2 })
             );
-            base.rotation.x = Math.PI / 2;
-            g.add(base);
-            const pl = new THREE.PointLight(0xb06aff, 1.1, 350);
-            pl.position.z = 16;
+            dish.position.z = 85;
+            g.add(dish);
+            const pl = new THREE.PointLight(0xc084fc, 1.6, 450);
+            pl.position.z = 80;
             g.add(pl);
           }
           g.visible = false;
           state.scene.add(g);
           return g;
         }
-        const types = ['hq','dock','dock','dock','control','control','dock','control'];
+        const types = ['hq','dock','dock','dock','control'];
         for (const t of types) state.stationMeshes.push(makeStationMesh(t));
         state.baseMesh = state.stationMeshes[0];
 
