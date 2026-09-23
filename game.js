@@ -33,9 +33,9 @@
       maxFuel: 100,
       fuelBurnThrust: 9,
       fuelBurnMine: 4,
-      maxShield: 50,
-      shieldRegen: 4.5,
-      shieldRegenDelay: 2.2,
+      maxShield: 60,
+      shieldRegen: 5.5,
+      shieldRegenDelay: 1.8,
       cargoCap: 50,
       oreSellScore: 4,
       oreSellTokenDiv: 8
@@ -508,7 +508,7 @@
     }
 
     for (let i = 0; i < w.mines; i++) {
-      const p = spawnAwayFromPlayer(400);
+      const p = spawnAwayFromPlayer(waveIndex === 0 ? 520 : 400);
       G.mines.push({
         x: p.x, y: p.y, z: 0,
         r: 12,
@@ -519,7 +519,11 @@
     }
 
     for (let i = 0; i < w.drones; i++) {
-      const p = spawnAwayFromPlayer(waveIndex === 0 ? 700 : 500);
+      const p = spawnAwayFromPlayer(waveIndex === 0 ? 780 : 500);
+      // Early waves: softer lasers / slower cadence; ramps to full by wave 4+
+      const laserDamage = Math.min(14, 6 + waveIndex * 2);
+      const fireCdMin = waveIndex === 0 ? 1.9 : waveIndex === 1 ? 1.5 : 1.1;
+      const fireCdMax = waveIndex === 0 ? 2.6 : waveIndex === 1 ? 2.2 : 1.8;
       G.drones.push({
         x: p.x, y: p.y, z: rand(-10, 10),
         r: 14,
@@ -527,8 +531,13 @@
         speed: rand(70, 110),
         hp: 40 + waveIndex * 8,
         maxHp: 40 + waveIndex * 8,
-        // Delay first volley so launch isn't an instant laser shower
-        fireCd: rand(1.8, 2.8) + (waveIndex === 0 ? 1.2 : 0),
+        // Wave 0: long first-shot delay; later waves keep a short wind-up
+        fireCd: rand(fireCdMin, fireCdMax) + (waveIndex === 0 ? 3.5 : waveIndex === 1 ? 1.0 : 0.4),
+        fireCdMin,
+        fireCdMax,
+        laserDamage,
+        // Wave 0 drones loiter before hunting so launch isn't a death sentence
+        aggroT: waveIndex === 0 ? rand(16, 22) : 0,
         vx: 0, vy: 0,
         orbitDir: Math.random() < 0.5 ? 1 : -1
       });
@@ -964,6 +973,17 @@
       const ang = angleTo(dr, G.player);
       const dPlayer = dist(dr, G.player);
       dr.angle = ang;
+
+      // Wave-0 loiter: slow drift, no chase/fire until aggro wakes
+      if (dr.aggroT > 0) {
+        dr.aggroT -= dt;
+        dr.vx = Math.cos(dr.angle) * 28;
+        dr.vy = Math.sin(dr.angle) * 28;
+        dr.x += dr.vx * dt;
+        dr.y += dr.vy * dt;
+        continue;
+      }
+
       // Prefer a standoff ring (~200–260) and strafe — ramming was an 80 DPS softlock
       const preferMin = 200;
       const preferMax = 260;
@@ -989,13 +1009,15 @@
 
       dr.fireCd -= dt;
       if (dr.fireCd <= 0 && dPlayer < 380) {
-        dr.fireCd = rand(1.1, 1.8);
+        const cdMin = dr.fireCdMin != null ? dr.fireCdMin : 1.1;
+        const cdMax = dr.fireCdMax != null ? dr.fireCdMax : 1.8;
+        dr.fireCd = rand(cdMin, cdMax);
         G.lasers.push({
           x: dr.x, y: dr.y,
           vx: Math.cos(ang) * 420,
           vy: Math.sin(ang) * 420,
           life: 1.2,
-          damage: 12,
+          damage: dr.laserDamage != null ? dr.laserDamage : 12,
           enemy: true
         });
       }
@@ -2051,7 +2073,7 @@
     G.player.vx = 0;
     G.player.vy = 0;
     G.player.angle = 0;
-    G.spawnGrace = 3.0;
+    G.spawnGrace = 8.0;
     G.particles = [];
     G.floatingText = [];
     G.achievements = new Set();
@@ -2073,7 +2095,7 @@
     waveClearScreen?.classList.add('hidden');
     G.wave++;
     G.running = true;
-    G.spawnGrace = Math.max(G.spawnGrace, 1.5);
+    G.spawnGrace = Math.max(G.spawnGrace, 2.0);
     // Soft refuel between waves
     G.fuel = Math.min(maxFuel(), G.fuel + maxFuel() * 0.35);
     G.shield = Math.min(maxShield(), G.shield + maxShield() * 0.4);
