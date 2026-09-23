@@ -1506,18 +1506,39 @@
       ctx.restore();
     }
 
-    // Lasers
+    // Nets
+    if (G.nets) {
+      for (const n of G.nets) {
+        const cx = n.x + (n.tx - n.x) * n.progress;
+        const cy = n.y + (n.ty - n.y) * n.progress;
+        const s = worldToScreen(cx, cy);
+        ctx.strokeStyle = `rgba(0,229,160,${Math.max(0, n.life)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, n.radius * n.progress, 0, Math.PI * 2);
+        ctx.stroke();
+        // spokes
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * Math.PI * 2 + G.t * 2;
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(s.x + Math.cos(a) * n.radius * n.progress, s.y + Math.sin(a) * n.radius * n.progress);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Lasers (bolts use vx/vy — never L.angle)
     if (G.lasers) {
       for (const L of G.lasers) {
-        ctx.strokeStyle = 'rgba(0,220,255,0.85)';
+        const s = worldToScreen(L.x, L.y);
+        ctx.strokeStyle = L.enemy ? '#ff4060' : '#00c8ff';
         ctx.lineWidth = 2;
-        ctx.shadowColor = '#00c8ff';
-        ctx.shadowBlur = 6;
-        const a = worldToScreen(L.x, L.y);
-        const b = worldToScreen(L.x + Math.cos(L.angle) * 24, L.y + Math.sin(L.angle) * 24);
+        ctx.shadowColor = ctx.strokeStyle;
+        ctx.shadowBlur = 8;
         ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x - L.vx * 0.02, s.y - L.vy * 0.02);
         ctx.stroke();
         ctx.shadowBlur = 0;
       }
