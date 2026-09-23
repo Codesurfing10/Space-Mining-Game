@@ -1,6 +1,6 @@
 /**
  * A·R·I·A — Space Mining & Debris Cleanup
- * Improved 3D gameplay core
+ * v5.3 — restored gameplay + Stripe Payment Link return + fee config
  */
 
 (() => {
@@ -27,8 +27,9 @@
       laserDamage: 28,
       netCooldown: 1.4,
       netRange: 160,
+      netRadius: 55,
       mineRange: 90,
-      mineRate: 18, // ore per second
+      mineRate: 18,
       maxFuel: 100,
       fuelBurnThrust: 9,
       fuelBurnMine: 4,
@@ -48,6 +49,7 @@
       shieldMax:    { name: 'Shield Gen',   max: 4, costBase: 16, costScale: 1.6,  perLevel: 12 },
       fuelTank:     { name: 'Fuel Tank',    max: 4, costBase: 12, costScale: 1.5,  perLevel: 20 }
     },
+    // ── Wallet + payments (wire real endpoints / keys for production) ──
     wallet: {
       chainId: '0xaa36a7', // Sepolia testnet hex; use '0x1' for mainnet
       chainName: 'Sepolia',
@@ -56,20 +58,25 @@
       demoMode: true
     },
     payments: {
-      stripePublishableKey: '',  // pk_test_... when ready
-      stripeAccountId: 'acct_replace_with_your_stripe_account',
-      cryptoWalletAddress: '0x0000000000000000000000000000000000000000',
+      stripePublishableKey: '', // pk_test_... or pk_live_... (optional for Payment Links)
+      stripeAccountId: '',      // acct_... if using Connect
+      cryptoWalletAddress: '',  // reserved for later crypto checkout
       feeDestination: 'stripe', // 'stripe' or 'wallet'
       buyerFeePercent: 0.05,
       sellerFeePercent: 0.05,
       feePercent: 0.05,
-      checkoutApiUrl: '',       // backend: POST { packId } -> { url }
-      demoMode: true,           // grants tokens locally without charge
+      checkoutApiUrl: '',       // optional backend: POST { packId } -> { url }
+      // Stay true until Payment Link URLs are pasted below, then set false.
+      demoMode: true,
+      // Each Payment Link's after-completion redirect should be:
+      //   https://timarc.space/?stripe_pack=PACK_ID&session_id={CHECKOUT_SESSION_ID}
+      returnOrigin: 'https://timarc.space',
       packs: [
-        { id: 'starter',  name: 'Starter Pack',  tokens: 50,  priceUsd: 4.99,  paymentLink: '', priceId: '' },
-        { id: 'pilot',    name: 'Pilot Pack',    tokens: 150, priceUsd: 9.99,  paymentLink: '', priceId: '' },
-        { id: 'captain',  name: 'Captain Pack',  tokens: 400, priceUsd: 19.99, paymentLink: '', priceId: '' },
-        { id: 'fleet',    name: 'Fleet Pack',    tokens: 1000,priceUsd: 39.99, paymentLink: '', priceId: '' }
+        // Paste buy.stripe.com/... URLs into paymentLink when ready
+        { id: 'starter',  name: 'Starter Pack',  tokens: 50,   priceUsd: 4.99,  paymentLink: '', priceId: '' },
+        { id: 'pilot',    name: 'Pilot Pack',    tokens: 150,  priceUsd: 9.99,  paymentLink: '', priceId: '' },
+        { id: 'captain',  name: 'Captain Pack',  tokens: 400,  priceUsd: 19.99, paymentLink: '', priceId: '' },
+        { id: 'fleet',    name: 'Fleet Pack',    tokens: 1000, priceUsd: 39.99, paymentLink: '', priceId: '' }
       ]
     },
     waves: [
@@ -94,9 +101,14 @@
     wave: 0,
     score: 0,
     tokens: 0,
-    ore: 0,
+    ore: 0,                 // current cargo kg
     debrisCleared: 0,
     hull: CFG.player.maxHull,
+    fuel: CFG.player.maxFuel,
+    shield: CFG.player.maxShield,
+    shieldHitT: 0,          // time since last shield hit
+    docking: false,
+    dockProgress: 0,
     player: {
       x: CFG.world.w / 2,
       y: CFG.world.h / 2,
@@ -105,6 +117,16 @@
       angle: 0,
       pitch: 0,
       roll: 0
+    },
+    // Upgrade levels (0 = stock)
+    upgrades: {
+      miningSpeed: 0,
+      laserDamage: 0,
+      netRadius: 0,
+      enginePower: 0,
+      cargoCap: 0,
+      shieldMax: 0,
+      fuelTank: 0
     },
     keys: {},
     mouse: { x: 0, y: 0, worldX: 0, worldY: 0, left: false, right: false },
@@ -118,12 +140,114 @@
     floatingText: [],
     cooldowns: { laser: 0, net: 0 },
     miningTarget: null,
-    base: { x: CFG.world.w / 2, y: CFG.world.h / 2, r: 70 },
+    // Stations: HQ + docking pads + control centers
+    stations: [],
+    activeStation: null,
+    base: { x: CFG.world.w / 2, y: CFG.world.h / 2, r: 70 }, // legacy alias → HQ
     camera: { x: 0, y: 0, z: 500, shake: 0 },
     achievements: new Set(),
+    combo: { count: 0, timer: 0 },
+    sessionStats: { oreSold: 0, damageBlocked: 0, upgradesBought: 0, tokensBought: 0 },
+    wallet: { connected: false, address: null, chainId: null },
     t: 0
   };
   window.G = G;
+
+  // ─── DERIVED STATS ────────────────────────────────────────────────────────
+  function getStat(key) {
+    const u = G.upgrades[key] || 0;
+    const def = CFG.upgrades[key];
+    if (!def) return 0;
+    if (key === 'cargoCap') return CFG.player.cargoCap + u * def.perLevel;
+    if (key === 'shieldMax') return CFG.player.maxShield + u * def.perLevel;
+    if (key === 'fuelTank') return CFG.player.maxFuel + u * def.perLevel;
+    return 1 + u * def.perLevel;
+  }
+
+  function effectiveMineRate() {
+    return CFG.player.mineRate * getStat('miningSpeed');
+  }
+  function effectiveLaserDamage() {
+    return CFG.player.laserDamage * getStat('laserDamage');
+  }
+  function effectiveNetRadius() {
+    return CFG.player.netRadius * getStat('netRadius');
+  }
+  function effectiveAccel() {
+    return CFG.player.accel * getStat('enginePower');
+  }
+  function effectiveMaxSpeed() {
+    return CFG.player.maxSpeed * (1 + (G.upgrades.enginePower || 0) * 0.08);
+  }
+  function maxCargo() { return getStat('cargoCap'); }
+  function maxShield() { return getStat('shieldMax'); }
+  function maxFuel() { return getStat('fuelTank'); }
+
+  function upgradeCost(key) {
+    const def = CFG.upgrades[key];
+    const lvl = G.upgrades[key] || 0;
+    if (lvl >= def.max) return null;
+    return Math.floor(def.costBase * Math.pow(def.costScale, lvl));
+  }
+
+  function initStations() {
+    const cx = CFG.world.w / 2, cy = CFG.world.h / 2;
+    // One large Star Wars-style station complex: HQ core + attached docks + control tower
+    G.stations = [
+      {
+        id: 'hq', type: 'hq', name: 'COMMAND DECK',
+        x: cx, y: cy, r: 140, z: 0,
+        services: { repair: true, refuel: true, shield: true, sell: true, shop: true },
+        color: '#5eead4', accent: '#22d3ee', pulse: 0
+      },
+      {
+        id: 'dock-port', type: 'dock', name: 'PORT HANGAR',
+        x: cx - 220, y: cy - 40, r: 70, z: 0,
+        services: { repair: true, refuel: true, shield: true, sell: true, shop: false },
+        color: '#38bdf8', accent: '#7dd3fc', pulse: 0.5, armFrom: 'hq'
+      },
+      {
+        id: 'dock-starboard', type: 'dock', name: 'STARBOARD HANGAR',
+        x: cx + 220, y: cy - 40, r: 70, z: 0,
+        services: { repair: true, refuel: true, shield: true, sell: true, shop: false },
+        color: '#38bdf8', accent: '#7dd3fc', pulse: 1.2, armFrom: 'hq'
+      },
+      {
+        id: 'dock-aft', type: 'dock', name: 'AFT HANGAR',
+        x: cx, y: cy + 230, r: 65, z: 0,
+        services: { repair: false, refuel: true, shield: true, sell: true, shop: false },
+        color: '#38bdf8', accent: '#7dd3fc', pulse: 2.0, armFrom: 'hq'
+      },
+      {
+        id: 'tower', type: 'control', name: 'CONTROL TOWER',
+        x: cx + 30, y: cy - 160, r: 55, z: 0,
+        services: { repair: false, refuel: false, shield: false, sell: false, shop: false, intel: true },
+        color: '#c084fc', accent: '#e9d5ff', pulse: 0.8, armFrom: 'hq'
+      }
+    ];
+    G.base = G.stations[0];
+    G.activeStation = null;
+    G.baseComplex = { cx, cy, r: 320 }; // overall footprint for radar/draw
+  }
+
+    function nearestStation(maxExtra = 80) {
+    let best = null, bestD = Infinity;
+    for (const s of G.stations) {
+      const d = dist(G.player, s) - s.r;
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    if (best && bestD < maxExtra) return best;
+    return null;
+  }
+
+  function stationInRange(s, pad = 55) {
+    return s && dist(G.player, s) < s.r + pad;
+  }
+
+  function getStation(id) {
+    return G.stations.find(s => s.id === id);
+  }
+
 
   // ─── DOM ──────────────────────────────────────────────────────────────────
   const canvas = document.getElementById('gameCanvas');
@@ -132,6 +256,13 @@
   const pauseScreen = document.getElementById('pauseScreen');
   const waveClearScreen = document.getElementById('waveClearScreen');
   const gameOverScreen = document.getElementById('gameOverScreen');
+  const shopScreen = document.getElementById('shopScreen');
+  const buyScreen = document.getElementById('buyScreen');
+  const walletScreen = document.getElementById('walletScreen');
+  const missionDashScreen = document.getElementById('missionDashScreen');
+  const liveDash = document.getElementById('liveDash');
+  const actionRail = document.getElementById('actionRail');
+  const walletPill = document.getElementById('walletPill');
 
   function resize() {
     canvas.width = window.innerWidth;
@@ -140,12 +271,34 @@
   window.addEventListener('resize', resize);
   resize();
 
+  function anyPanelOpen() {
+    return [shopScreen, buyScreen, walletScreen, missionDashScreen]
+      .some(el => el && !el.classList.contains('hidden'));
+  }
+
+  function closeAllPanels() {
+    shopScreen?.classList.add('hidden');
+    buyScreen?.classList.add('hidden');
+    walletScreen?.classList.add('hidden');
+    missionDashScreen?.classList.add('hidden');
+  }
+
   // ─── INPUT ────────────────────────────────────────────────────────────────
   window.addEventListener('keydown', e => {
     G.keys[e.code] = true;
-    if (e.code === 'Escape' && G.running) togglePause();
-    if (e.code === 'KeyR' && G.running && !G.paused) tryDock();
-    if (e.code === 'KeyE' && G.running && !G.paused) tryMine(true);
+    if (e.code === 'Escape') {
+      if (anyPanelOpen()) {
+        closeAllPanels();
+        if (G.running) G.paused = false;
+        return;
+      }
+      if (G.running) togglePause();
+    }
+    if (!G.running || G.paused) return;
+    if (e.code === 'KeyR') tryDock();
+    if (e.code === 'KeyE') tryMine(true);
+    if (e.code === 'KeyU') openShop();
+    if (e.code === 'KeyB') openBuy();
   });
   window.addEventListener('keyup', e => { G.keys[e.code] = false; });
 
@@ -164,10 +317,47 @@
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 
   document.getElementById('startBtn')?.addEventListener('click', startGame);
-  document.getElementById('resumeBtn')?.addEventListener('click', () => { G.paused = false; pauseScreen.classList.add('hidden'); });
+  consumeStripeReturn();
+  document.getElementById('resumeBtn')?.addEventListener('click', () => {
+    G.paused = false;
+    pauseScreen.classList.add('hidden');
+  });
   document.getElementById('restartFromPauseBtn')?.addEventListener('click', startGame);
   document.getElementById('restartBtn')?.addEventListener('click', startGame);
   document.getElementById('nextWaveBtn')?.addEventListener('click', nextWave);
+  document.getElementById('shopBtn')?.addEventListener('click', openShop);
+  document.getElementById('closeShopBtn')?.addEventListener('click', closeShop);
+  document.getElementById('shopFromPauseBtn')?.addEventListener('click', () => {
+    pauseScreen?.classList.add('hidden');
+    openShop();
+  });
+  document.getElementById('buyFromPauseBtn')?.addEventListener('click', () => {
+    pauseScreen?.classList.add('hidden');
+    openBuy();
+  });
+  document.getElementById('walletFromPauseBtn')?.addEventListener('click', () => {
+    pauseScreen?.classList.add('hidden');
+    openWallet();
+  });
+  document.getElementById('closeBuyBtn')?.addEventListener('click', () => {
+    buyScreen?.classList.add('hidden');
+    if (G.running) G.paused = false;
+  });
+  document.getElementById('closeWalletBtn')?.addEventListener('click', () => {
+    walletScreen?.classList.add('hidden');
+    if (G.running) G.paused = false;
+  });
+  document.getElementById('closeMissionDashBtn')?.addEventListener('click', () => {
+    missionDashScreen?.classList.add('hidden');
+    if (G.running) G.paused = false;
+  });
+  document.getElementById('railShop')?.addEventListener('click', openShop);
+  document.getElementById('railBuy')?.addEventListener('click', openBuy);
+  document.getElementById('railWallet')?.addEventListener('click', openWallet);
+  document.getElementById('railDash')?.addEventListener('click', openMissionDash);
+  document.getElementById('walletPill')?.addEventListener('click', openWallet);
+  document.getElementById('connectWalletBtn')?.addEventListener('click', connectWallet);
+  document.getElementById('syncWalletBtn')?.addEventListener('click', syncWalletBalance);
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -198,11 +388,33 @@
   }
 
   function addScore(n, reason) {
+    // Combo window
+    if (G.combo.timer > 0) {
+      G.combo.count++;
+      const mult = 1 + Math.min(0.5, G.combo.count * 0.05);
+      n = Math.floor(n * mult);
+    } else {
+      G.combo.count = 1;
+    }
+    G.combo.timer = 2.5;
     G.score += n;
     if (reason) floatText(G.player.x, G.player.y - 30, `+${n} ${reason}`, '#ffc846');
   }
 
   function damagePlayer(amt) {
+    // Shield absorbs first
+    if (G.shield > 0) {
+      const absorbed = Math.min(G.shield, amt);
+      G.shield -= absorbed;
+      G.sessionStats.damageBlocked += absorbed;
+      amt -= absorbed;
+      G.shieldHitT = 0;
+      if (absorbed > 0) {
+        burst(G.player.x, G.player.y, '#44aaff', 5);
+        floatText(G.player.x, G.player.y - 20, `SHIELD -${Math.floor(absorbed)}`, '#44aaff');
+      }
+    }
+    if (amt <= 0) return;
     G.hull -= amt;
     G.camera.shake = Math.min(12, G.camera.shake + amt * 0.15);
     burst(G.player.x, G.player.y, '#ff4060', 8);
@@ -216,9 +428,16 @@
     const key = title;
     if (G.achievements.has(key)) return;
     G.achievements.add(key);
+    // Token rewards for some achievements
+    let tokenGain = 0;
+    if (title.includes('SALE') || title.includes('ASTEROID')) tokenGain = 2;
+    if (title.includes('DRONE') || title.includes('WAVE')) tokenGain = 3;
+    if (title.includes('FULL CARGO') || title.includes('SHIELD MASTER')) tokenGain = 5;
+    if (tokenGain > 0) G.tokens += tokenGain;
     const el = document.createElement('div');
     el.className = 'achievement-toast';
-    el.innerHTML = `<div class="achievement-title">★ ${title}</div><div class="achievement-reward">${reward}</div>`;
+    el.innerHTML = `<div class="achievement-title">★ ${title}</div>
+      <div class="achievement-reward">${reward}${tokenGain ? ` · +${tokenGain} ◆` : ''}</div>`;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 3200);
   }
@@ -246,11 +465,13 @@
     for (let i = 0; i < w.asteroids; i++) {
       const p = spawnAwayFromPlayer(300);
       const r = rand(22, 55);
+      const quality = rand(0.7, 1.35); // ore quality multiplier
       G.asteroids.push({
         x: p.x, y: p.y, z: rand(-30, 30),
         r,
-        ore: Math.floor(r * 1.8),
-        maxOre: Math.floor(r * 1.8),
+        ore: Math.floor(r * 1.8 * quality),
+        maxOre: Math.floor(r * 1.8 * quality),
+        quality,
         angle: rand(0, Math.PI * 2),
         spin: rand(-1.2, 1.2),
         vx: rand(-20, 20),
@@ -260,6 +481,8 @@
 
     for (let i = 0; i < w.debris; i++) {
       const p = spawnAwayFromPlayer(250);
+      const rarity = Math.random();
+      const valueMult = rarity > 0.92 ? 2.2 : rarity > 0.75 ? 1.5 : 1;
       G.debris.push({
         x: p.x, y: p.y, z: rand(-15, 15),
         r: rand(8, 16),
@@ -268,7 +491,8 @@
         vx: rand(-35, 35),
         vy: rand(-35, 35),
         hp: 20,
-        value: Math.floor(rand(15, 40))
+        value: Math.floor(rand(15, 40) * valueMult),
+        rarity: valueMult
       });
     }
 
@@ -301,7 +525,12 @@
   // ─── ACTIONS ──────────────────────────────────────────────────────────────
   function fireLaser() {
     if (G.cooldowns.laser > 0) return;
+    if (G.fuel < 0.5) {
+      floatText(G.player.x, G.player.y - 25, 'NO FUEL', '#ff4060');
+      return;
+    }
     G.cooldowns.laser = CFG.player.laserCooldown;
+    G.fuel = Math.max(0, G.fuel - 0.4);
 
     const aim = Math.atan2(G.mouse.worldY - G.player.y, G.mouse.worldX - G.player.x);
     const spread = (Math.random() - 0.5) * 0.04;
@@ -313,7 +542,7 @@
       vx: Math.cos(a) * 900,
       vy: Math.sin(a) * 900,
       life: CFG.player.laserRange / 900,
-      damage: CFG.player.laserDamage
+      damage: effectiveLaserDamage()
     });
 
     spawnParticle(G.player.x + Math.cos(a) * 16, G.player.y + Math.sin(a) * 16, '#00c8ff', 0.2, 40);
@@ -321,15 +550,21 @@
 
   function deployNet() {
     if (G.cooldowns.net > 0) return;
+    if (G.fuel < 1.5) {
+      floatText(G.player.x, G.player.y - 25, 'NO FUEL', '#ff4060');
+      return;
+    }
     G.cooldowns.net = CFG.player.netCooldown;
+    G.fuel = Math.max(0, G.fuel - 1.2);
     const aim = Math.atan2(G.mouse.worldY - G.player.y, G.mouse.worldX - G.player.x);
+    const r = effectiveNetRadius();
     G.nets.push({
       x: G.player.x,
       y: G.player.y,
       tx: G.player.x + Math.cos(aim) * CFG.player.netRange,
       ty: G.player.y + Math.sin(aim) * CFG.player.netRange,
       progress: 0,
-      radius: 55,
+      radius: r,
       life: 1.1
     });
   }
@@ -344,63 +579,166 @@
     }
     G.miningTarget = best;
     if (!best) return;
-
-    if (force || G.keys['KeyE']) {
-      const extracted = Math.min(best.ore, CFG.player.mineRate * (force ? 0.05 : 0));
-      // continuous mining handled in update
-    }
   }
 
   function tryDock() {
-    if (dist(G.player, G.base) < G.base.r + 30) {
+    const s = nearestStation(55);
+    if (!s) {
+      floatText(G.player.x, G.player.y - 25, 'NO STATION IN RANGE', '#ff4060');
+      return;
+    }
+    if (s.type === 'control') {
+      // Instant intel ping at control centers
+      activateControlCenter(s);
+      return;
+    }
+    G.activeStation = s;
+    G.docking = true;
+    G.dockProgress = Math.max(G.dockProgress, 0.05);
+  }
+
+  function activateControlCenter(s) {
+    G.activeStation = s;
+    // Intel: reveal threats briefly + small token stipend
+    G.tokens += 1;
+    addScore(25, 'INTEL');
+    floatText(s.x, s.y - 30, 'CONTROL LINK', '#b06aff');
+    floatText(G.player.x, G.player.y - 40, '+1 ◆ INTEL', '#b06aff');
+    // Mark enemies for radar boost
+    G.controlBoostT = 12;
+    showAchievement('CONTROL LINK', 'Linked to a control center');
+    for (const d of G.drones) d.intelMarked = true;
+    for (const m of G.mines) m.intelMarked = true;
+  }
+
+  function completeDock() {
+    const s = G.activeStation || G.base;
+    const svc = s.services || {};
+
+    if (svc.repair) {
       const healed = CFG.player.maxHull - G.hull;
       if (healed > 0) {
         G.hull = CFG.player.maxHull;
         floatText(G.player.x, G.player.y - 40, 'HULL REPAIRED', '#00e5a0');
-        addScore(50, 'DOCK');
+        addScore(40, 'DOCK');
       }
-      if (G.ore > 0) {
-        const value = G.ore * 3;
-        addScore(value, 'ORE');
-        G.tokens += Math.floor(G.ore / 10);
-        floatText(G.player.x, G.player.y - 60, `+${G.ore}kg SOLD`, '#ffc846');
-        G.ore = 0;
-        showAchievement('FIRST SALE', '+◆ tokens from ore');
-      }
+    } else if (G.hull < CFG.player.maxHull) {
+      // Partial repair at basic docks
+      G.hull = Math.min(CFG.player.maxHull, G.hull + 25);
+      floatText(G.player.x, G.player.y - 40, 'PARTIAL REPAIR +25', '#00e5a0');
     }
+
+    if (svc.refuel) {
+      G.fuel = maxFuel();
+      floatText(G.player.x, G.player.y - 55, 'REFUELED', '#ffaa33');
+    }
+    if (svc.shield) {
+      G.shield = maxShield();
+      floatText(G.player.x, G.player.y - 70, 'SHIELD ONLINE', '#44aaff');
+    }
+
+    if (svc.sell && G.ore > 0) {
+      const kg = G.ore;
+      const value = Math.floor(kg * CFG.player.oreSellScore);
+      const tok = Math.floor(kg / CFG.player.oreSellTokenDiv);
+      addScore(value, 'ORE');
+      G.tokens += tok;
+      G.sessionStats.oreSold += kg;
+      floatText(G.player.x, G.player.y - 85, `+${Math.floor(kg)}kg → +${tok}◆`, '#ffc846');
+      // Push haul to Space Resource Exchange at live mark
+      if (CFG.srx && CFG.srx.enabled && window.SRX) {
+        const quality = 1 + Math.min(0.5, (G.wave || 0) * 0.03);
+        window.SRX.depositGameOre(kg, quality).then((res) => {
+          if (res && res.ok) {
+            floatText(G.player.x, G.player.y - 110, `SRX +$${res.total_usd_mark} mark`, '#5eead4');
+            showAchievement('EXCHANGE CREDIT', 'Ore posted to Space Resource Exchange');
+            if (typeof updateSrxPanel === 'function') updateSrxPanel();
+          }
+        }).catch((err) => console.warn('SRX deposit', err));
+      }
+      G.ore = 0;
+      showAchievement('FIRST SALE', 'Sold ore at a station');
+      if (kg >= maxCargo() * 0.95) showAchievement('FULL CARGO', 'Docked with a full hold');
+    }
+
+    if (svc.shop) {
+      floatText(G.player.x, G.player.y - 100, 'HQ — PRESS U FOR UPGRADES', '#00c8ff');
+    }
+
+    floatText(s.x, s.y - s.r - 10, s.name, s.color || '#00e5a0');
+    G.docking = false;
+    G.dockProgress = 0;
+    G.activeStation = null;
   }
+
+  function buyUpgrade(key) {
+    const cost = upgradeCost(key);
+    if (cost === null) return false;
+    if (G.tokens < cost) {
+      floatText(G.player.x, G.player.y - 30, 'NOT ENOUGH ◆', '#ff4060');
+      return false;
+    }
+    G.tokens -= cost;
+    try {
+      const bank = Math.max(0, Number(localStorage.getItem('aria_token_bank') || 0) || 0);
+      localStorage.setItem('aria_token_bank', String(Math.max(0, bank - cost)));
+    } catch (_) {}
+    G.upgrades[key] = (G.upgrades[key] || 0) + 1;
+    G.sessionStats.upgradesBought++;
+    // Apply immediate capacity bumps
+    if (key === 'shieldMax') G.shield = Math.min(G.shield + CFG.upgrades.shieldMax.perLevel, maxShield());
+    if (key === 'fuelTank') G.fuel = Math.min(G.fuel + CFG.upgrades.fuelTank.perLevel, maxFuel());
+    showAchievement('UPGRADE', `${CFG.upgrades[key].name} Lv.${G.upgrades[key]}`);
+    renderShopList();
+    return true;
+  }
+  window.buyUpgrade = buyUpgrade;
 
   // ─── UPDATE ───────────────────────────────────────────────────────────────
   function updatePlayer(dt) {
     const p = G.player;
     const aim = Math.atan2(G.mouse.worldY - p.y, G.mouse.worldX - p.x);
 
-    // Smooth turn toward aim
     let diff = aim - p.angle;
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
     p.angle += clamp(diff, -CFG.player.turnRate * dt, CFG.player.turnRate * dt);
 
-    // Thrust
     let ax = 0, ay = 0;
+    let thrusting = false;
+    const accel = effectiveAccel();
+
     if (G.keys['KeyW'] || G.keys['ArrowUp']) {
-      ax += Math.cos(p.angle) * CFG.player.accel;
-      ay += Math.sin(p.angle) * CFG.player.accel;
+      ax += Math.cos(p.angle) * accel;
+      ay += Math.sin(p.angle) * accel;
+      thrusting = true;
     }
     if (G.keys['KeyS'] || G.keys['ArrowDown']) {
-      ax -= Math.cos(p.angle) * CFG.player.accel * 0.55;
-      ay -= Math.sin(p.angle) * CFG.player.accel * 0.55;
+      ax -= Math.cos(p.angle) * accel * 0.55;
+      ay -= Math.sin(p.angle) * accel * 0.55;
+      thrusting = true;
     }
     if (G.keys['KeyA'] || G.keys['ArrowLeft']) {
-      ax += Math.cos(p.angle - Math.PI / 2) * CFG.player.accel * 0.7;
-      ay += Math.sin(p.angle - Math.PI / 2) * CFG.player.accel * 0.7;
+      ax += Math.cos(p.angle - Math.PI / 2) * accel * 0.7;
+      ay += Math.sin(p.angle - Math.PI / 2) * accel * 0.7;
+      thrusting = true;
     }
     if (G.keys['KeyD'] || G.keys['ArrowRight']) {
-      ax += Math.cos(p.angle + Math.PI / 2) * CFG.player.accel * 0.7;
-      ay += Math.sin(p.angle + Math.PI / 2) * CFG.player.accel * 0.7;
+      ax += Math.cos(p.angle + Math.PI / 2) * accel * 0.7;
+      ay += Math.sin(p.angle + Math.PI / 2) * accel * 0.7;
+      thrusting = true;
     }
 
-    // Emergency brake
+    // Fuel burn for thrust
+    if (thrusting) {
+      if (G.fuel <= 0) {
+        ax *= 0.15;
+        ay *= 0.15;
+      } else {
+        G.fuel = Math.max(0, G.fuel - CFG.player.fuelBurnThrust * dt);
+      }
+    }
+
     if (G.keys['ShiftLeft'] || G.keys['ShiftRight']) {
       p.vx *= 0.90;
       p.vy *= 0.90;
@@ -409,11 +747,11 @@
     p.vx += ax * dt;
     p.vy += ay * dt;
 
-    // Cap speed
+    const maxSp = effectiveMaxSpeed();
     const sp = Math.hypot(p.vx, p.vy);
-    if (sp > CFG.player.maxSpeed) {
-      p.vx = (p.vx / sp) * CFG.player.maxSpeed;
-      p.vy = (p.vy / sp) * CFG.player.maxSpeed;
+    if (sp > maxSp) {
+      p.vx = (p.vx / sp) * maxSp;
+      p.vy = (p.vy / sp) * maxSp;
     }
 
     p.vx *= Math.pow(CFG.player.damp, dt * 60);
@@ -422,50 +760,83 @@
     p.x += p.vx * dt;
     p.y += p.vy * dt;
 
-    // Soft world bounds
     const m = 40;
     if (p.x < m) { p.x = m; p.vx *= -0.4; }
     if (p.y < m) { p.y = m; p.vy *= -0.4; }
     if (p.x > CFG.world.w - m) { p.x = CFG.world.w - m; p.vx *= -0.4; }
     if (p.y > CFG.world.h - m) { p.y = CFG.world.h - m; p.vy *= -0.4; }
 
-    // Visual bank / pitch from velocity
     p.roll = clamp(-p.vx * 0.0015 + diff * 0.3, -0.5, 0.5);
     p.pitch = clamp(p.vy * 0.001, -0.3, 0.3);
 
-    // Engine particles
-    if (ax !== 0 || ay !== 0) {
-      if (Math.random() < 0.7) {
-        spawnParticle(
-          p.x - Math.cos(p.angle) * 16,
-          p.y - Math.sin(p.angle) * 16,
-          '#ff6b35', 0.35, 50
-        );
-      }
+    if (thrusting && G.fuel > 0 && Math.random() < 0.7) {
+      spawnParticle(
+        p.x - Math.cos(p.angle) * 16,
+        p.y - Math.sin(p.angle) * 16,
+        '#ff6b35', 0.35, 50
+      );
     }
 
-    // Actions
     if (G.mouse.left) fireLaser();
     if (G.mouse.right) deployNet();
 
-    // Continuous mining
+    // Continuous mining with fuel + cargo limits
     tryMine(false);
     if (G.miningTarget && G.keys['KeyE'] && G.miningTarget.ore > 0) {
-      const rate = CFG.player.mineRate * dt;
-      const take = Math.min(G.miningTarget.ore, rate);
-      G.miningTarget.ore -= take;
-      G.ore += take;
-      if (Math.random() < 0.4) {
-        spawnParticle(G.miningTarget.x, G.miningTarget.y, '#c0a060', 0.4, 40);
-      }
-      if (G.miningTarget.ore <= 0) {
-        burst(G.miningTarget.x, G.miningTarget.y, '#c0a060', 16);
-        addScore(80, 'ASTEROID');
-        G.asteroids = G.asteroids.filter(a => a !== G.miningTarget);
-        G.miningTarget = null;
-        showAchievement('ASTEROID CRACKED', 'First asteroid fully mined');
+      if (G.fuel <= 0) {
+        floatText(p.x, p.y - 25, 'NO FUEL', '#ff4060');
+      } else if (G.ore >= maxCargo()) {
+        floatText(p.x, p.y - 25, 'CARGO FULL', '#ffc846');
+        showAchievement('FULL CARGO', 'Hold is at capacity — dock to sell');
+      } else {
+        G.fuel = Math.max(0, G.fuel - CFG.player.fuelBurnMine * dt);
+        const rate = effectiveMineRate() * dt;
+        const space = maxCargo() - G.ore;
+        const take = Math.min(G.miningTarget.ore, rate, space);
+        G.miningTarget.ore -= take;
+        G.ore += take;
+        if (Math.random() < 0.4) {
+          spawnParticle(G.miningTarget.x, G.miningTarget.y, '#c0a060', 0.4, 40);
+        }
+        if (G.miningTarget.ore <= 0) {
+          const qualityBonus = Math.floor(80 * (G.miningTarget.quality || 1));
+          burst(G.miningTarget.x, G.miningTarget.y, '#c0a060', 16);
+          addScore(qualityBonus, 'ASTEROID');
+          G.asteroids = G.asteroids.filter(a => a !== G.miningTarget);
+          G.miningTarget = null;
+          showAchievement('ASTEROID CRACKED', 'First asteroid fully mined');
+        }
       }
     }
+
+    // Shield regen
+    G.shieldHitT += dt;
+    if (G.shieldHitT > CFG.player.shieldRegenDelay && G.shield < maxShield()) {
+      G.shield = Math.min(maxShield(), G.shield + CFG.player.shieldRegen * dt);
+    }
+
+    // Docking progress at active station
+    if (G.docking && G.activeStation) {
+      const s = G.activeStation;
+      if (!stationInRange(s, 50)) {
+        G.docking = false;
+        G.dockProgress = 0;
+        G.activeStation = null;
+      } else {
+        G.dockProgress = Math.min(1, G.dockProgress + dt * 0.9);
+        if (G.dockProgress >= 1) completeDock();
+      }
+    } else if (G.keys['KeyR']) {
+      const s = nearestStation(45);
+      if (s && s.type !== 'control') {
+        G.activeStation = s;
+        G.docking = true;
+      }
+    }
+
+    // Station ambient pulse + control boost timer
+    for (const s of G.stations) s.pulse = (s.pulse || 0) + dt;
+    if (G.controlBoostT > 0) G.controlBoostT = Math.max(0, G.controlBoostT - dt);
   }
 
   function updateLasers(dt) {
@@ -476,7 +847,6 @@
       L.life -= dt;
       if (L.life <= 0) { G.lasers.splice(i, 1); continue; }
 
-      // Hit debris
       for (let j = G.debris.length - 1; j >= 0; j--) {
         const d = G.debris[j];
         if (Math.hypot(L.x - d.x, L.y - d.y) < d.r + 4) {
@@ -484,10 +854,12 @@
           burst(L.x, L.y, '#00c8ff', 6);
           G.lasers.splice(i, 1);
           if (d.hp <= 0) {
+            const distBonus = 1 + Math.min(0.4, dist(G.player, d) / 800);
+            const score = Math.floor(d.value * distBonus * (d.rarity || 1));
             burst(d.x, d.y, '#b06aff', 14);
-            addScore(d.value, 'DEBRIS');
+            addScore(score, 'DEBRIS');
             G.debrisCleared++;
-            G.tokens += 1;
+            G.tokens += d.rarity > 1.5 ? 2 : 1;
             G.debris.splice(j, 1);
           }
           break;
@@ -495,7 +867,6 @@
       }
       if (!G.lasers[i]) continue;
 
-      // Hit mines
       for (let j = G.mines.length - 1; j >= 0; j--) {
         const m = G.mines[j];
         if (Math.hypot(L.x - m.x, L.y - m.y) < m.r + 6) {
@@ -509,7 +880,6 @@
       }
       if (!G.lasers[i]) continue;
 
-      // Hit drones
       for (let j = G.drones.length - 1; j >= 0; j--) {
         const dr = G.drones[j];
         if (Math.hypot(L.x - dr.x, L.y - dr.y) < dr.r + 5) {
@@ -517,8 +887,9 @@
           burst(L.x, L.y, '#ff4060', 5);
           G.lasers.splice(i, 1);
           if (dr.hp <= 0) {
+            const distBonus = 1 + Math.min(0.35, dist(G.player, dr) / 700);
             burst(dr.x, dr.y, '#ff4060', 18);
-            addScore(120, 'DRONE');
+            addScore(Math.floor(120 * distBonus), 'DRONE');
             G.tokens += 3;
             G.drones.splice(j, 1);
             showAchievement('DRONE HUNTER', 'Destroyed a hostile drone');
@@ -538,7 +909,6 @@
       const cy = n.y + (n.ty - n.y) * n.progress;
 
       if (n.progress >= 0.85) {
-        // Capture debris
         for (let j = G.debris.length - 1; j >= 0; j--) {
           const d = G.debris[j];
           if (Math.hypot(cx - d.x, cy - d.y) < n.radius) {
@@ -549,7 +919,6 @@
             G.debris.splice(j, 1);
           }
         }
-        // Capture / disable drones
         for (let j = G.drones.length - 1; j >= 0; j--) {
           const dr = G.drones[j];
           if (Math.hypot(cx - dr.x, cy - dr.y) < n.radius) {
@@ -565,7 +934,6 @@
   }
 
   function updateEnemies(dt) {
-    // Mines
     for (let i = G.mines.length - 1; i >= 0; i--) {
       const m = G.mines[i];
       m.pulse += dt * 4;
@@ -577,7 +945,6 @@
       }
     }
 
-    // Drones — chase + shoot
     for (const dr of G.drones) {
       const ang = angleTo(dr, G.player);
       dr.angle = ang;
@@ -604,7 +971,6 @@
       }
     }
 
-    // Enemy laser hits player
     for (let i = G.lasers.length - 1; i >= 0; i--) {
       const L = G.lasers[i];
       if (!L.enemy) continue;
@@ -656,14 +1022,18 @@
 
   function checkWaveClear() {
     if (G.debris.length === 0 && G.mines.length === 0 && G.drones.length === 0) {
-      // Asteroids optional — wave clears when threats gone
       const w = CFG.waves[Math.min(G.wave, CFG.waves.length - 1)];
       G.score += w.bonus;
-      G.tokens += 5 + G.wave * 2;
+      const waveTok = 5 + G.wave * 2;
+      G.tokens += waveTok;
       document.getElementById('waveClearTitle').textContent = `LEVEL ${G.wave + 1} COMPLETE`;
       document.getElementById('waveBonus').textContent = `+${w.bonus}`;
       document.getElementById('totalScoreWave').textContent = G.score.toLocaleString();
-      document.getElementById('waveTokens').textContent = `+${5 + G.wave * 2}`;
+      document.getElementById('waveTokens').textContent = `+${waveTok}`;
+      const detail = document.getElementById('waveDetail');
+      if (detail) {
+        detail.textContent = `Ore in hold: ${Math.floor(G.ore)} kg · Cargo ${Math.floor(G.ore)}/${Math.floor(maxCargo())} · Shield ${Math.floor(G.shield)}/${Math.floor(maxShield())}`;
+      }
       document.getElementById('nextWaveMsg').textContent =
         G.wave + 1 >= CFG.waves.length ? 'Final sector cleared — endless mode!' : `Preparing Wave ${G.wave + 2} deployment...`;
       G.running = false;
@@ -678,8 +1048,9 @@
     G.cooldowns.laser = Math.max(0, G.cooldowns.laser - dt);
     G.cooldowns.net = Math.max(0, G.cooldowns.net - dt);
     G.camera.shake = Math.max(0, G.camera.shake - dt * 18);
+    if (G.combo.timer > 0) G.combo.timer -= dt;
+    else G.combo.count = 0;
 
-    // Mouse world position (camera-relative)
     const cx = G.player.x;
     const cy = G.player.y;
     G.mouse.worldX = G.mouse.x - canvas.width / 2 + cx;
@@ -693,13 +1064,12 @@
     updateParticles(dt);
     checkWaveClear();
 
-    // Camera follow
     G.camera.x = G.player.x;
     G.camera.y = G.player.y;
   }
   window.update = update;
 
-  // ─── 2D RENDER (HUD + overlays; 3D scene draws behind) ────────────────────
+  // ─── 2D RENDER ────────────────────────────────────────────────────────────
   function worldToScreen(x, y) {
     const shakeX = (Math.random() - 0.5) * G.camera.shake * 2;
     const shakeY = (Math.random() - 0.5) * G.camera.shake * 2;
@@ -714,90 +1084,315 @@
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(p.angle);
-    // body
-    ctx.fillStyle = '#00c8ff';
+    const thrust = (G.keys['KeyW'] || G.keys['ArrowUp']) && G.fuel > 0 ? 1 : 0.15;
+    const cargoFill = maxCargo() > 0 ? G.ore / maxCargo() : 0;
+
+    // Wings (back)
+    ctx.fillStyle = '#0a6a8a';
     ctx.shadowColor = '#00c8ff';
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 8;
     ctx.beginPath();
-    ctx.moveTo(16, 0);
-    ctx.lineTo(-10, -9);
-    ctx.lineTo(-6, 0);
-    ctx.lineTo(-10, 9);
+    ctx.moveTo(-4, 0); ctx.lineTo(-14, -18); ctx.lineTo(-2, -11); ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-4, 0); ctx.lineTo(-14, 18); ctx.lineTo(-2, 11); ctx.closePath();
+    ctx.fill();
+    // Wing tips
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillRect(-14, -19, 3, 4);
+    ctx.fillRect(-14, 15, 3, 4);
+
+    // Cargo hull (belly)
+    ctx.fillStyle = `rgb(${40 + cargoFill * 80},${50 + cargoFill * 40},${60})`;
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(-16, -7); ctx.lineTo(-4, -8); ctx.lineTo(-4, 8); ctx.lineTo(-16, 7);
     ctx.closePath();
     ctx.fill();
-    // cockpit
-    ctx.fillStyle = '#00ffff';
+    ctx.strokeStyle = cargoFill > 0.5 ? '#ffc846' : '#3a4a58';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Cargo stripes
+    ctx.fillStyle = cargoFill > 0.01 ? `rgba(255,200,70,${0.3 + cargoFill * 0.6})` : '#222';
+    for (let i = 0; i < 3; i++) ctx.fillRect(-14 + i * 3.2, -5.5, 1.5, 11);
+
+    // Main fuselage
+    ctx.fillStyle = '#1a9ec4';
+    ctx.shadowColor = '#00c8ff';
+    ctx.shadowBlur = 14;
     ctx.beginPath();
-    ctx.arc(4, 0, 3.5, 0, Math.PI * 2);
+    ctx.moveTo(20, 0);
+    ctx.lineTo(6, -6);
+    ctx.lineTo(-6, -5);
+    ctx.lineTo(-8, 0);
+    ctx.lineTo(-6, 5);
+    ctx.lineTo(6, 6);
+    ctx.closePath();
     ctx.fill();
-    // thruster glow
-    const thrust = (G.keys['KeyW'] || G.keys['ArrowUp']) ? 1 : 0.2;
-    ctx.fillStyle = `rgba(255,107,53,${0.5 + thrust * 0.5})`;
+
+    // Nose accent
+    ctx.fillStyle = '#00e5ff';
     ctx.beginPath();
-    ctx.moveTo(-10, -4);
-    ctx.lineTo(-10 - 8 * thrust - Math.random() * 4, 0);
-    ctx.lineTo(-10, 4);
+    ctx.moveTo(20, 0); ctx.lineTo(10, -3.5); ctx.lineTo(10, 3.5);
+    ctx.closePath();
     ctx.fill();
+
+    // Cockpit
+    ctx.fillStyle = '#aaffff';
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.ellipse(6, -1, 4, 2.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Dorsal fin
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#0a6a8a';
+    ctx.beginPath();
+    ctx.moveTo(-2, -5); ctx.lineTo(-8, -14); ctx.lineTo(-4, -5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Running lights
+    ctx.fillStyle = '#00ffaa';
+    ctx.shadowColor = '#00ffaa';
+    ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.arc(8, -5, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(8, 5, 1.5, 0, Math.PI * 2); ctx.fill();
+
+    // Shield
+    if (G.shield > 0) {
+      const sp = G.shield / maxShield();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = `rgba(68,170,255,${0.2 + sp * 0.5})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 24, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Main thruster plume
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = `rgba(255,100,40,${0.45 + thrust * 0.5})`;
+    ctx.beginPath();
+    ctx.moveTo(-16, -5);
+    ctx.lineTo(-16 - 10 * thrust - Math.random() * 5, 0);
+    ctx.lineTo(-16, 5);
+    ctx.closePath();
+    ctx.fill();
+    if (thrust > 0.5) {
+      ctx.fillStyle = 'rgba(255,220,120,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(-16, -2.5);
+      ctx.lineTo(-16 - 6 * thrust, 0);
+      ctx.lineTo(-16, 2.5);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.restore();
   }
 
   function render() {
-    // Clear with transparent so Three.js layer shows through
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (!G.running && titleScreen && !titleScreen.classList.contains('hidden')) {
-      return; // title screen only
+      return;
     }
 
-    // Soft vignette / space dust in 2D
     ctx.fillStyle = 'rgba(2,13,24,0.15)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Base station
-    {
-      const s = worldToScreen(G.base.x, G.base.y);
-      ctx.strokeStyle = 'rgba(0,229,160,0.5)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, G.base.r, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(0,229,160,0.08)';
-      ctx.fill();
-      ctx.fillStyle = '#00e5a0';
-      ctx.font = '11px Courier New';
-      ctx.textAlign = 'center';
-      ctx.fillText('BASE  [R] DOCK', s.x, s.y + G.base.r + 14);
+    // ── STAR WARS-STYLE BASE COMPLEX ─────────────────────────────────────
+    if (!G.stations || G.stations.length === 0) initStations();
+    const hq = G.stations.find(s => s.type === 'hq') || G.stations[0];
+    if (hq) {
+      const hc = worldToScreen(hq.x, hq.y);
+      // Connecting arms from HQ to each attached module
+      for (const st of G.stations) {
+        if (st === hq) continue;
+        const sc = worldToScreen(st.x, st.y);
+        ctx.strokeStyle = 'rgba(100,180,220,0.35)';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.moveTo(hc.x, hc.y);
+        ctx.lineTo(sc.x, sc.y);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(56,189,248,0.55)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(hc.x, hc.y);
+        ctx.lineTo(sc.x, sc.y);
+        ctx.stroke();
+        // Arm segment panels
+        const mx = (hc.x + sc.x) / 2, my = (hc.y + sc.y) / 2;
+        ctx.fillStyle = 'rgba(15,40,60,0.7)';
+        ctx.fillRect(mx - 8, my - 8, 16, 16);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(mx - 8, my - 8, 16, 16);
+      }
     }
 
-    // Asteroids (2D fallback / outline)
+    for (const st of G.stations) {
+      const s = worldToScreen(st.x, st.y);
+      const active = G.docking && G.activeStation === st;
+      const near = stationInRange(st, 60);
+      const pulse = 0.5 + 0.5 * Math.sin((st.pulse || 0) * 2.5 + G.t);
+      const col = st.color || '#5eead4';
+
+      // Large soft glow
+      ctx.globalAlpha = active ? 0.25 : near ? 0.18 : 0.12;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, st.r + 28 + pulse * 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      if (st.type === 'hq') {
+        // Massive octagonal command deck
+        const sides = 8;
+        ctx.fillStyle = 'rgba(8,30,40,0.75)';
+        ctx.strokeStyle = active ? '#ffc846' : col;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let i = 0; i < sides; i++) {
+          const a = (i / sides) * Math.PI * 2 - Math.PI / 8 + G.t * 0.05;
+          const rr = st.r;
+          const px = s.x + Math.cos(a) * rr, py = s.y + Math.sin(a) * rr;
+          i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Inner deck
+        ctx.strokeStyle = 'rgba(34,211,238,0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < sides; i++) {
+          const a = (i / sides) * Math.PI * 2 - Math.PI / 8 - G.t * 0.08;
+          const rr = st.r * 0.62;
+          const px = s.x + Math.cos(a) * rr, py = s.y + Math.sin(a) * rr;
+          i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        // Core reactor glow
+        ctx.fillStyle = col;
+        ctx.shadowColor = col;
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 14 + pulse * 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ecfeff';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // Turbolaser-style edge turrets
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + G.t * 0.05;
+          const tx = s.x + Math.cos(a) * (st.r - 12);
+          const ty = s.y + Math.sin(a) * (st.r - 12);
+          ctx.fillStyle = '#22d3ee';
+          ctx.fillRect(tx - 4, ty - 4, 8, 8);
+        }
+      } else if (st.type === 'dock') {
+        // Rectangular hangar bay (Star Destroyer docking feel)
+        const w = st.r * 1.6, h = st.r * 1.1;
+        ctx.fillStyle = 'rgba(10,25,45,0.8)';
+        ctx.fillRect(s.x - w / 2, s.y - h / 2, w, h);
+        ctx.strokeStyle = active ? '#ffc846' : col;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(s.x - w / 2, s.y - h / 2, w, h);
+        // Inner hangar mouth
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(s.x - w * 0.28, s.y - h * 0.28, w * 0.56, h * 0.56);
+        ctx.strokeStyle = 'rgba(125,211,252,0.8)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(s.x - w * 0.28, s.y - h * 0.28, w * 0.56, h * 0.56);
+        // Approach lights
+        for (let i = -2; i <= 2; i++) {
+          ctx.fillStyle = (Math.floor(G.t * 4 + i) % 2 === 0) ? '#fbbf24' : '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(s.x + i * 14, s.y + h / 2 + 6, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Corner brackets
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2.5;
+        const bw = w / 2 - 4, bh = h / 2 - 4;
+        for (const [sx, sy] of [[-1,-1],[1,-1],[1,1],[-1,1]]) {
+          ctx.beginPath();
+          ctx.moveTo(s.x + sx * bw, s.y + sy * (bh - 12));
+          ctx.lineTo(s.x + sx * bw, s.y + sy * bh);
+          ctx.lineTo(s.x + sx * (bw - 12), s.y + sy * bh);
+          ctx.stroke();
+        }
+      } else if (st.type === 'control') {
+        // Tall control tower silhouette
+        ctx.fillStyle = 'rgba(30,15,50,0.85)';
+        ctx.fillRect(s.x - 18, s.y - st.r, 36, st.r * 1.6);
+        ctx.strokeStyle = active ? '#ffc846' : col;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(s.x - 18, s.y - st.r, 36, st.r * 1.6);
+        // Tower top dish
+        ctx.fillStyle = col;
+        ctx.shadowColor = col;
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y - st.r, 16 + pulse * 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = `rgba(233,213,255,${0.4 + pulse * 0.4})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y - st.r, 24, G.t * 2, G.t * 2 + 1.5);
+        ctx.stroke();
+        // Windows
+        ctx.fillStyle = '#e9d5ff';
+        for (let i = 0; i < 4; i++) {
+          ctx.fillRect(s.x - 10, s.y - st.r + 28 + i * 16, 20, 6);
+        }
+      }
+
+      if (active && G.dockProgress > 0) {
+        ctx.strokeStyle = '#ffc846';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, st.r + 14, -Math.PI / 2, -Math.PI / 2 + G.dockProgress * Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.font = 'bold 12px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = active ? '#ffc846' : col;
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 4;
+      let label = st.name;
+      if (active) label = 'DOCKING…';
+      else if (near && st.type === 'control') label = st.name + '  [R] LINK';
+      else if (near) label = st.name + '  [R] DOCK';
+      ctx.fillText(label, s.x, s.y + st.r + 20);
+      ctx.shadowBlur = 0;
+    }
+
+    // ── World entities ───────────────────────────────────────────────────
+    // Asteroids
     for (const a of G.asteroids) {
       const s = worldToScreen(a.x, a.y);
-      const orePct = a.ore / a.maxOre;
-      ctx.save();
-      ctx.translate(s.x, s.y);
-      ctx.rotate(a.angle);
-      ctx.fillStyle = `rgba(180,150,80,${0.35 + orePct * 0.4})`;
+      const r = a.r || 20;
+      ctx.fillStyle = '#a08050';
       ctx.strokeStyle = '#c0a060';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      for (let i = 0; i < 7; i++) {
-        const ang = (i / 7) * Math.PI * 2;
-        const rr = a.r * (0.75 + Math.sin(i * 2.3) * 0.25);
-        i === 0 ? ctx.moveTo(Math.cos(ang) * rr, Math.sin(ang) * rr)
-                : ctx.lineTo(Math.cos(ang) * rr, Math.sin(ang) * rr);
-      }
-      ctx.closePath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.restore();
-      if (a === G.miningTarget) {
-        ctx.strokeStyle = '#00e5a0';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
+      if (a.ore > 0) {
+        ctx.fillStyle = 'rgba(255,200,70,0.35)';
         ctx.beginPath();
-        ctx.arc(s.x, s.y, a.r + 8, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        ctx.arc(s.x, s.y, r * (a.ore / (a.maxOre || a.ore || 1)) * 0.6, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
@@ -806,232 +1401,630 @@
       const s = worldToScreen(d.x, d.y);
       ctx.save();
       ctx.translate(s.x, s.y);
-      ctx.rotate(d.angle);
-      ctx.fillStyle = '#8af';
-      ctx.strokeStyle = '#b06aff';
-      ctx.lineWidth = 1;
-      ctx.fillRect(-d.r * 0.7, -d.r * 0.5, d.r * 1.4, d.r);
-      ctx.strokeRect(-d.r * 0.7, -d.r * 0.5, d.r * 1.4, d.r);
+      ctx.rotate((d.angle || 0) + G.t);
+      ctx.fillStyle = d.rarity > 1.5 ? '#ffc846' : '#8899cc';
+      ctx.fillRect(-6, -4, 12, 8);
       ctx.restore();
     }
 
     // Mines
     for (const m of G.mines) {
       const s = worldToScreen(m.x, m.y);
-      const pulse = 0.5 + Math.sin(m.pulse) * 0.5;
-      ctx.strokeStyle = `rgba(255,64,96,${0.3 + pulse * 0.4})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, m.triggerR, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = `rgb(255,${40 + pulse * 40},${60 + pulse * 40})`;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, m.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Drones
-    for (const dr of G.drones) {
-      const s = worldToScreen(dr.x, dr.y);
-      ctx.save();
-      ctx.translate(s.x, s.y);
-      ctx.rotate(dr.angle);
-      ctx.fillStyle = '#ff4060';
+      const pulse = 0.7 + 0.3 * Math.sin(G.t * 6);
+      ctx.fillStyle = `rgba(255,64,96,${pulse})`;
       ctx.shadowColor = '#ff4060';
       ctx.shadowBlur = 10;
       ctx.beginPath();
-      ctx.moveTo(12, 0);
-      ctx.lineTo(-8, -7);
-      ctx.lineTo(-4, 0);
-      ctx.lineTo(-8, 7);
+      ctx.arc(s.x, s.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,100,100,0.4)';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, m.triggerR || 40, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Drones
+    for (const d of G.drones) {
+      const s = worldToScreen(d.x, d.y);
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(d.angle || 0);
+      ctx.fillStyle = '#ff4060';
+      ctx.shadowColor = '#ff2040';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(12, 0); ctx.lineTo(-8, -7); ctx.lineTo(-8, 7);
       ctx.closePath();
       ctx.fill();
-      // hp bar
       ctx.shadowBlur = 0;
-      ctx.fillStyle = '#333';
-      ctx.fillRect(-10, -16, 20, 3);
-      ctx.fillStyle = '#ff4060';
-      ctx.fillRect(-10, -16, 20 * (dr.hp / dr.maxHp), 3);
+      if (d.intelMarked || G.controlBoostT > 0) {
+        ctx.strokeStyle = '#b06aff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
-    // Nets
-    for (const n of G.nets) {
-      const cx = n.x + (n.tx - n.x) * n.progress;
-      const cy = n.y + (n.ty - n.y) * n.progress;
-      const s = worldToScreen(cx, cy);
-      ctx.strokeStyle = `rgba(0,229,160,${n.life})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, n.radius * n.progress, 0, Math.PI * 2);
-      ctx.stroke();
-      // spokes
-      for (let k = 0; k < 6; k++) {
-        const a = (k / 6) * Math.PI * 2 + G.t * 2;
+    // Lasers
+    if (G.lasers) {
+      for (const L of G.lasers) {
+        ctx.strokeStyle = 'rgba(0,220,255,0.85)';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#00c8ff';
+        ctx.shadowBlur = 6;
+        const a = worldToScreen(L.x, L.y);
+        const b = worldToScreen(L.x + Math.cos(L.angle) * 24, L.y + Math.sin(L.angle) * 24);
         ctx.beginPath();
-        ctx.moveTo(s.x, s.y);
-        ctx.lineTo(s.x + Math.cos(a) * n.radius * n.progress, s.y + Math.sin(a) * n.radius * n.progress);
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
         ctx.stroke();
+        ctx.shadowBlur = 0;
       }
     }
 
-    // Lasers
-    for (const L of G.lasers) {
-      const s = worldToScreen(L.x, L.y);
-      ctx.strokeStyle = L.enemy ? '#ff4060' : '#00c8ff';
-      ctx.lineWidth = 2;
-      ctx.shadowColor = ctx.strokeStyle;
-      ctx.shadowBlur = 8;
+    // Particles
+    for (const p of G.particles) {
+      const s = worldToScreen(p.x, p.y);
+      ctx.globalAlpha = Math.max(0, p.life || 0.5);
+      ctx.fillStyle = p.color || '#fff';
       ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(s.x - L.vx * 0.02, s.y - L.vy * 0.02);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    // Particles (2D)
-    for (const P of G.particles) {
-      const s = worldToScreen(P.x, P.y);
-      const alpha = P.life / P.maxLife;
-      ctx.fillStyle = P.color;
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, P.r * alpha, 0, Math.PI * 2);
+      ctx.arc(s.x, s.y, p.size || 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
 
     // Floating text
-    for (const f of G.floatingText) {
-      const s = worldToScreen(f.x, f.y);
-      ctx.globalAlpha = Math.max(0, f.life);
-      ctx.fillStyle = f.color;
-      ctx.font = 'bold 13px Courier New';
-      ctx.textAlign = 'center';
-      ctx.fillText(f.text, s.x, s.y);
-      ctx.globalAlpha = 1;
+    if (G.floatingText) {
+      for (const ft of G.floatingText) {
+        const s = worldToScreen(ft.x, ft.y);
+        ctx.globalAlpha = Math.max(0, ft.life || 1);
+        ctx.fillStyle = ft.color || '#ffc846';
+        ctx.font = '12px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, s.x, s.y);
+        ctx.globalAlpha = 1;
+      }
     }
 
-    // Player ship (2D silhouette always; 3D mesh is bonus)
-    if (G.running) drawShip(G.player);
+    // PLAYER SHIP
+    if (G.running && G.player) drawShip(G.player);
 
-    // Crosshair
-    if (G.running && !G.paused) {
-      ctx.strokeStyle = 'rgba(0,200,255,0.7)';
-      ctx.lineWidth = 1;
-      const mx = G.mouse.x, my = G.mouse.y;
+    // Dock progress near ship
+    if (G.docking) {
+      const s = worldToScreen(G.player.x, G.player.y);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(s.x - 40, s.y - 36, 80, 8);
+      ctx.fillStyle = '#ffc846';
+      ctx.fillRect(s.x - 40, s.y - 36, 80 * G.dockProgress, 8);
+      ctx.fillStyle = '#ffc846';
+      ctx.font = '10px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('DOCKING', s.x, s.y - 40);
+    }
+
+    // ── RADAR / MINIMAP ──────────────────────────────────────────────────
+    drawRadar();
+  }
+
+  function drawRadar() {
+    const rw = 160, rh = 160, pad = 14;
+    const mx0 = pad, my0 = canvas.height - rh - pad;
+    ctx.fillStyle = 'rgba(4,12,22,0.82)';
+    ctx.strokeStyle = 'rgba(0,200,180,0.45)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(mx0, my0, rw, rh, 8) : ctx.rect(mx0, my0, rw, rh);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = '10px Courier New';
+    ctx.fillStyle = '#5eead4';
+    ctx.textAlign = 'left';
+    ctx.fillText('RADAR', mx0 + 8, my0 + 14);
+
+    const sx = rw / CFG.world.w, sy = rh / CFG.world.h;
+    const mx = mx0, my = my0;
+
+    // Range rings
+    ctx.strokeStyle = 'rgba(0,180,160,0.15)';
+    ctx.lineWidth = 1;
+    for (const f of [0.25, 0.5, 0.75]) {
       ctx.beginPath();
-      ctx.moveTo(mx - 10, my); ctx.lineTo(mx - 3, my);
-      ctx.moveTo(mx + 3, my); ctx.lineTo(mx + 10, my);
-      ctx.moveTo(mx, my - 10); ctx.lineTo(mx, my - 3);
-      ctx.moveTo(mx, my + 3); ctx.lineTo(mx, my + 10);
+      ctx.arc(mx + rw / 2, my + rh / 2, Math.min(rw, rh) * f * 0.48, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // HUD
-    if (G.running) drawHUD();
-  }
-  window.render = render;
-
-  function drawHUD() {
-    const pad = 16;
-    ctx.textAlign = 'left';
-    ctx.font = '12px Courier New';
-
-    // Top-left status
-    ctx.fillStyle = 'rgba(0,200,255,0.85)';
-    ctx.fillText(`SCORE  ${G.score.toLocaleString()}`, pad, pad + 12);
-    ctx.fillStyle = 'rgba(0,229,160,0.85)';
-    ctx.fillText(`TOKENS ◆ ${G.tokens}`, pad, pad + 28);
-    ctx.fillStyle = 'rgba(255,200,70,0.85)';
-    ctx.fillText(`ORE  ${Math.floor(G.ore)} kg`, pad, pad + 44);
-    ctx.fillStyle = 'rgba(180,230,255,0.6)';
-    ctx.fillText(`WAVE  ${G.wave + 1} / ${CFG.waves.length}`, pad, pad + 60);
-    ctx.fillText(`DEBRIS  ${G.debrisCleared}`, pad, pad + 76);
-
-    // Hull bar
-    const bw = 160, bh = 10;
-    const bx = pad, by = canvas.height - pad - bh - 8;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(bx, by, bw, bh);
-    const hp = G.hull / CFG.player.maxHull;
-    ctx.fillStyle = hp > 0.4 ? '#00e5a0' : hp > 0.2 ? '#ffc846' : '#ff4060';
-    ctx.fillRect(bx, by, bw * hp, bh);
-    ctx.strokeStyle = 'rgba(0,200,255,0.4)';
-    ctx.strokeRect(bx, by, bw, bh);
-    ctx.fillStyle = 'rgba(180,230,255,0.7)';
-    ctx.font = '10px Courier New';
-    ctx.fillText('HULL', bx, by - 4);
-
-    // Cooldowns
-    const cx = canvas.width - pad - 100;
-    ctx.fillStyle = 'rgba(180,230,255,0.5)';
-    ctx.fillText(`LASER ${G.cooldowns.laser > 0 ? G.cooldowns.laser.toFixed(1) + 's' : 'RDY'}`, cx, pad + 12);
-    ctx.fillText(`NET   ${G.cooldowns.net > 0 ? G.cooldowns.net.toFixed(1) + 's' : 'RDY'}`, cx, pad + 28);
-    if (G.miningTarget) {
-      ctx.fillStyle = '#00e5a0';
-      ctx.fillText('MINING [E]', cx, pad + 44);
+    // Stations
+    for (const st of G.stations) {
+      const color = st.type === 'hq' ? '#5eead4' : st.type === 'dock' ? '#38bdf8' : '#c084fc';
+      const rad = st.type === 'hq' ? 5 : 3.5;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(mx + st.x * sx, my + st.y * sy, rad, 0, Math.PI * 2);
+      ctx.fill();
     }
-
-    // Minimap
-    const mw = 120, mh = 120;
-    const mx = canvas.width - pad - mw;
-    const my = canvas.height - pad - mh;
-    ctx.fillStyle = 'rgba(0,20,40,0.65)';
-    ctx.fillRect(mx, my, mw, mh);
-    ctx.strokeStyle = 'rgba(0,200,255,0.3)';
-    ctx.strokeRect(mx, my, mw, mh);
-    const sx = mw / CFG.world.w;
-    const sy = mh / CFG.world.h;
-    // base
-    ctx.fillStyle = '#00e5a0';
-    ctx.beginPath();
-    ctx.arc(mx + G.base.x * sx, my + G.base.y * sy, 3, 0, Math.PI * 2);
-    ctx.fill();
-    // player
-    ctx.fillStyle = '#00c8ff';
-    ctx.beginPath();
-    ctx.arc(mx + G.player.x * sx, my + G.player.y * sy, 3, 0, Math.PI * 2);
-    ctx.fill();
-    // threats
-    ctx.fillStyle = '#ff4060';
-    for (const d of G.drones) {
-      ctx.fillRect(mx + d.x * sx - 1, my + d.y * sy - 1, 2, 2);
-    }
-    ctx.fillStyle = '#ff8844';
-    for (const m of G.mines) {
-      ctx.fillRect(mx + m.x * sx - 1, my + m.y * sy - 1, 2, 2);
-    }
+    // Asteroids
     ctx.fillStyle = '#c0a060';
     for (const a of G.asteroids) {
-      ctx.fillRect(mx + a.x * sx - 1, my + a.y * sy - 1, 2, 2);
+      const sz = 1.5 + ((a.r || 20) / 55) * 1.5;
+      ctx.fillRect(mx + a.x * sx - sz / 2, my + a.y * sy - sz / 2, sz, sz);
     }
+    // Debris
+    for (const d of G.debris) {
+      ctx.fillStyle = d.rarity > 1.5 ? '#ffc846' : '#b06aff';
+      ctx.fillRect(mx + d.x * sx - 1, my + d.y * sy - 1, 2.5, 2.5);
+    }
+    // Mines
+    const blink = Math.sin(G.t * 8) > 0;
+    ctx.fillStyle = blink ? '#ff4060' : '#aa2030';
+    for (const m of G.mines) {
+      ctx.beginPath();
+      ctx.arc(mx + m.x * sx, my + m.y * sy, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Drones
+    for (const d of G.drones) {
+      const dd = dist(G.player, d);
+      const sz = clamp(4 - dd / 400, 2, 4) + ((G.controlBoostT > 0 || d.intelMarked) ? 1.5 : 0);
+      ctx.fillStyle = dd < 300 ? '#ff2040' : '#ff6080';
+      if (G.controlBoostT > 0 || d.intelMarked) {
+        ctx.strokeStyle = '#b06aff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(mx + d.x * sx, my + d.y * sy, sz + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(mx + d.x * sx, my + d.y * sy, sz, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Player
+    const prx = mx + G.player.x * sx, pry = my + G.player.y * sy;
+    ctx.fillStyle = '#00c8ff';
+    ctx.beginPath();
+    ctx.arc(prx, pry, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#00c8ff';
+    ctx.beginPath();
+    ctx.moveTo(prx, pry);
+    ctx.lineTo(prx + Math.cos(G.player.angle) * 8, pry + Math.sin(G.player.angle) * 8);
+    ctx.stroke();
+  }
+
+  // ─── LIVE DASHBOARD ───────────────────────────────────────────────────────
+  function setHudChrome(on) {
+    liveDash?.classList.toggle('on', on);
+    actionRail?.classList.toggle('on', on);
+    walletPill?.classList.toggle('on', on);
+    document.getElementById('shipHelp')?.classList.toggle('on', on);
+    document.getElementById('radarLegend')?.classList.toggle('on', on);
+    document.getElementById('srxPanel')?.style && (document.getElementById('srxPanel').style.display = on ? 'block' : 'none');
+  }
+
+  function updateLiveDash() {
+    const el = (id) => document.getElementById(id);
+    if (el('dashScore')) el('dashScore').textContent = G.score.toLocaleString();
+    if (el('dashTokens')) el('dashTokens').textContent = G.tokens;
+    if (el('dashWave')) el('dashWave').textContent = `${G.wave + 1}`;
+    if (el('dashOre')) el('dashOre').textContent = `${Math.floor(G.ore)} kg`;
+    if (el('dashCombo')) {
+      el('dashCombo').textContent = (G.combo.count > 1 && G.combo.timer > 0) ? `x${G.combo.count}` : '—';
+    }
+  }
+
+  function updateWalletPill() {
+    if (!walletPill) return;
+    const text = document.getElementById('walletPillText');
+    if (G.wallet.connected && G.wallet.address) {
+      walletPill.classList.add('connected');
+      const a = G.wallet.address;
+      if (text) text.textContent = a.slice(0, 6) + '…' + a.slice(-4);
+    } else {
+      walletPill.classList.remove('connected');
+      if (text) text.textContent = 'WALLET';
+    }
+  }
+
+  // ─── WALLET ───────────────────────────────────────────────────────────────
+  async function connectWallet() {
+    const status = document.getElementById('walletStatusText');
+    const addrBox = document.getElementById('walletAddressBox');
+    const syncBtn = document.getElementById('syncWalletBtn');
+    const btn = document.getElementById('connectWalletBtn');
+
+    if (G.wallet.connected) {
+      G.wallet = { connected: false, address: null, chainId: null };
+      if (status) status.textContent = 'Disconnected';
+      if (addrBox) { addrBox.classList.add('hidden'); addrBox.textContent = ''; }
+      if (syncBtn) syncBtn.disabled = true;
+      if (btn) btn.textContent = 'CONNECT';
+      updateWalletPill();
+      return;
+    }
+
+    try {
+      const eth = window.ethereum;
+      if (!eth) {
+        if (CFG.wallet.demoMode) {
+          const demo = '0xDEMO' + Math.random().toString(16).slice(2, 10).padEnd(34, '0');
+          G.wallet = { connected: true, address: demo, chainId: CFG.wallet.chainId };
+          if (status) status.innerHTML = '<span class="status-warn">Demo wallet (no extension)</span>';
+          if (addrBox) { addrBox.classList.remove('hidden'); addrBox.textContent = demo; }
+          if (syncBtn) syncBtn.disabled = false;
+          if (btn) btn.textContent = 'DISCONNECT';
+          updateWalletPill();
+          showAchievement('WALLET LINKED', 'Demo address connected');
+          return;
+        }
+        if (status) status.innerHTML = '<span class="status-err">No wallet extension found</span>';
+        return;
+      }
+
+      if (btn) btn.textContent = '…';
+      const accounts = await eth.request({ method: 'eth_requestAccounts' });
+      const address = accounts[0];
+      let chainId = await eth.request({ method: 'eth_chainId' });
+      if (CFG.wallet.chainId && chainId !== CFG.wallet.chainId) {
+        try {
+          await eth.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: CFG.wallet.chainId }]
+          });
+          chainId = CFG.wallet.chainId;
+        } catch (_) { /* user may reject */ }
+      }
+      G.wallet = { connected: true, address, chainId };
+      if (status) status.innerHTML = '<span class="status-ok">Connected · ' + (CFG.wallet.chainName || chainId) + '</span>';
+      if (addrBox) { addrBox.classList.remove('hidden'); addrBox.textContent = address; }
+      if (syncBtn) syncBtn.disabled = false;
+      if (btn) btn.textContent = 'DISCONNECT';
+      updateWalletPill();
+      showAchievement('WALLET LINKED', 'Address connected');
+
+      // Optional SIWE-style auth hook
+      if (CFG.wallet.authApiUrl) {
+        try {
+          await fetch(CFG.wallet.authApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address, chainId })
+          });
+        } catch (err) {
+          console.warn('wallet auth API', err);
+        }
+      }
+    } catch (err) {
+      console.warn('connectWallet', err);
+      if (status) status.innerHTML = '<span class="status-err">Connection failed</span>';
+      if (btn) btn.textContent = 'CONNECT';
+    }
+  }
+
+  async function syncWalletBalance() {
+    const hint = document.getElementById('walletHint');
+    if (!G.wallet.address) return;
+    if (!CFG.wallet.balanceApiUrl) {
+      if (hint) hint.textContent = 'No balanceApiUrl configured — tokens remain local.';
+      return;
+    }
+    try {
+      const url = CFG.wallet.balanceApiUrl + (CFG.wallet.balanceApiUrl.includes('?') ? '&' : '?') +
+        'address=' + encodeURIComponent(G.wallet.address);
+      const res = await fetch(url);
+      const data = await res.json();
+      if (typeof data.tokens === 'number') {
+        G.tokens = Math.max(G.tokens, Math.floor(data.tokens));
+        if (hint) hint.innerHTML = '<span class="status-ok">Synced · balance applied</span>';
+        updateLiveDash();
+      }
+    } catch (err) {
+      if (hint) hint.innerHTML = '<span class="status-err">Sync failed</span>';
+      console.warn('syncWallet', err);
+    }
+  }
+
+  function openWallet() {
+    closeAllPanels();
+    pauseScreen?.classList.add('hidden');
+    if (G.running) G.paused = true;
+    walletScreen?.classList.remove('hidden');
+    const status = document.getElementById('walletStatusText');
+    const addrBox = document.getElementById('walletAddressBox');
+    const btn = document.getElementById('connectWalletBtn');
+    const syncBtn = document.getElementById('syncWalletBtn');
+    if (G.wallet.connected) {
+      if (status) status.innerHTML = '<span class="status-ok">Connected</span>';
+      if (addrBox) { addrBox.classList.remove('hidden'); addrBox.textContent = G.wallet.address; }
+      if (btn) btn.textContent = 'DISCONNECT';
+      if (syncBtn) syncBtn.disabled = false;
+    } else {
+      if (status) status.textContent = 'Not connected';
+      if (addrBox) addrBox.classList.add('hidden');
+      if (btn) btn.textContent = 'CONNECT';
+      if (syncBtn) syncBtn.disabled = true;
+    }
+  }
+
+  // ─── STRIPE / TOKEN PACKS ─────────────────────────────────────────────────
+  function renderPackList() {
+    const list = document.getElementById('packList');
+    if (!list) return;
+    list.innerHTML = '';
+    for (const pack of CFG.payments.packs) {
+      const row = document.createElement('div');
+      row.className = 'pack-row';
+      row.innerHTML = `
+        <div>
+          <div class="pack-name">${pack.name}</div>
+          <div class="pack-meta">+${pack.tokens} ◆ · $${pack.priceUsd.toFixed(2)}</div>
+        </div>
+        <button class="buy-btn stripe" data-pack="${pack.id}">BUY</button>`;
+      list.appendChild(row);
+    }
+    list.querySelectorAll('.buy-btn').forEach(btn => {
+      btn.addEventListener('click', () => purchasePack(btn.getAttribute('data-pack')));
+    });
+    const st = document.getElementById('stripeStatus');
+    if (st) {
+      if (CFG.payments.demoMode) st.innerHTML = 'Status: <span class="status-warn">demo mode — packs grant tokens, no charge</span>';
+      else if (CFG.payments.checkoutApiUrl || CFG.payments.packs.some(p => p.paymentLink))
+        st.innerHTML = 'Status: <span class="status-ok">live checkout configured</span>';
+      else st.innerHTML = 'Status: <span class="status-err">set paymentLink or checkoutApiUrl</span>';
+    }
+  }
+
+  function creditPack(pack, reason) {
+    G.tokens += pack.tokens;
+    G.sessionStats.tokensBought += pack.tokens;
+    try {
+      const bank = Number(localStorage.getItem('aria_token_bank') || 0) + pack.tokens;
+      localStorage.setItem('aria_token_bank', String(bank));
+    } catch (_) {}
+    if (G.player) floatText(G.player.x, G.player.y - 40, `+${pack.tokens} ◆`, '#00e5a0');
+    showAchievement('TOKEN PACK', `${pack.name} credited`);
+    updateLiveDash();
+    const st = document.getElementById('stripeStatus');
+    if (st) st.innerHTML = `<span class="status-ok">${reason}: +${pack.tokens} ◆</span>`;
+  }
+
+  async function purchasePack(packId) {
+    const pack = CFG.payments.packs.find(p => p.id === packId);
+    if (!pack) return;
+
+    // 1) Prefer backend Checkout Session
+    if (CFG.payments.checkoutApiUrl && !CFG.payments.demoMode) {
+      try {
+        const res = await fetch(CFG.payments.checkoutApiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            packId: pack.id,
+            priceId: pack.priceId,
+            wallet: G.wallet.address || null
+          })
+        });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+          return;
+        }
+      } catch (err) {
+        console.warn('checkout API', err);
+      }
+    }
+
+    // 2) Stripe Payment Link (live) — same tab so success redirect returns here
+    if (pack.paymentLink && !CFG.payments.demoMode) {
+      let url = pack.paymentLink;
+      try {
+        const u = new URL(pack.paymentLink);
+        u.searchParams.set('client_reference_id', pack.id);
+        url = u.toString();
+      } catch (_) {}
+      window.location.href = url;
+      return;
+    }
+
+    // 3) Demo grant (no charge) until Payment Links are configured
+    creditPack(pack, 'Demo');
+  }
+
+  /** Stripe Payment Link return: ?stripe_pack=starter&session_id=cs_test_... */
+  function consumeStripeReturn() {
+    let params;
+    try { params = new URLSearchParams(window.location.search); } catch (_) { return; }
+    const packId = params.get('stripe_pack');
+    const sessionId = params.get('session_id') || params.get('checkout_session_id');
+    if (!packId) return;
+    const pack = CFG.payments.packs.find(p => p.id === packId);
+    if (!pack) return;
+    try {
+      if (sessionId) {
+        const dedupeKey = 'aria_stripe_' + sessionId;
+        if (localStorage.getItem(dedupeKey)) {
+          try {
+            window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+          } catch (_) {}
+          return;
+        }
+        localStorage.setItem(dedupeKey, '1');
+      }
+    } catch (_) {}
+    creditPack(pack, 'Stripe');
+    try { openBuy(); } catch (_) {}
+    try {
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+    } catch (_) {}
+  }
+
+  function openBuy() {
+    closeAllPanels();
+    pauseScreen?.classList.add('hidden');
+    if (G.running) G.paused = true;
+    buyScreen?.classList.remove('hidden');
+    renderPackList();
+  }
+
+  function openMissionDash() {
+    closeAllPanels();
+    pauseScreen?.classList.add('hidden');
+    if (G.running) G.paused = true;
+    missionDashScreen?.classList.remove('hidden');
+    const el = (id) => document.getElementById(id);
+    if (el('mdScore')) el('mdScore').textContent = G.score.toLocaleString();
+    if (el('mdTokens')) el('mdTokens').textContent = G.tokens;
+    if (el('mdOre')) el('mdOre').textContent = Math.floor(G.ore);
+    if (el('mdDebris')) el('mdDebris').textContent = G.debrisCleared;
+    if (el('mdSystems')) {
+      el('mdSystems').innerHTML =
+        `HULL ${Math.floor(G.hull)}/${CFG.player.maxHull} · ` +
+        `SHIELD ${Math.floor(G.shield)}/${Math.floor(maxShield())} · ` +
+        `FUEL ${Math.floor(G.fuel)}/${Math.floor(maxFuel())} · ` +
+        `CARGO ${Math.floor(G.ore)}/${Math.floor(maxCargo())}<br>` +
+        `Upgrades bought: ${G.sessionStats.upgradesBought} · ` +
+        `Ore sold: ${Math.floor(G.sessionStats.oreSold)} kg · ` +
+        `Damage blocked: ${Math.floor(G.sessionStats.damageBlocked)} · ` +
+        `Tokens purchased: ${G.sessionStats.tokensBought}`;
+    }
+    if (el('mdWalletLine')) {
+      el('mdWalletLine').textContent = G.wallet.connected
+        ? `Wallet: ${G.wallet.address}`
+        : 'Wallet: not linked';
+    }
+  }
+
+  // ─── SHOP UI ──────────────────────────────────────────────────────────────
+  function renderShopList() {
+    const list = document.getElementById('shopList');
+    if (!list) return;
+    list.innerHTML = '';
+    const tokEl = document.getElementById('shopTokens');
+    if (tokEl) tokEl.textContent = G.tokens;
+
+    for (const key of Object.keys(CFG.upgrades)) {
+      const def = CFG.upgrades[key];
+      const lvl = G.upgrades[key] || 0;
+      const cost = upgradeCost(key);
+      const row = document.createElement('div');
+      row.className = 'shop-row';
+      const maxed = cost === null;
+      let effect = '';
+      if (key === 'cargoCap') effect = `+${def.perLevel} kg`;
+      else if (key === 'shieldMax') effect = `+${def.perLevel} shield`;
+      else if (key === 'fuelTank') effect = `+${def.perLevel} fuel`;
+      else effect = `+${Math.round(def.perLevel * 100)}%`;
+
+      row.innerHTML = `
+        <div class="shop-info">
+          <div class="shop-name">${def.name}</div>
+          <div class="shop-meta">Lv ${lvl}/${def.max} · ${effect}</div>
+        </div>
+        <button class="buy-btn" data-key="${key}" ${maxed || G.tokens < cost ? 'disabled' : ''}>
+          ${maxed ? 'MAX' : cost + ' ◆'}
+        </button>`;
+      list.appendChild(row);
+    }
+
+    list.querySelectorAll('.buy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const k = btn.getAttribute('data-key');
+        if (buyUpgrade(k)) renderShopList();
+      });
+    });
+  }
+
+  function openShop() {
+    if (!shopScreen) return;
+    closeAllPanels();
+    G.paused = true;
+    pauseScreen?.classList.add('hidden');
+    shopScreen.classList.remove('hidden');
+    renderShopList();
+  }
+
+  function closeShop() {
+    shopScreen?.classList.add('hidden');
+    if (G.running) G.paused = false;
   }
 
   // ─── FLOW ─────────────────────────────────────────────────────────────────
+
+  function updateSrxPanel() {
+    const el = document.getElementById('srxPanel');
+    if (!el || !window.SRX) return;
+    const st = SRX.state;
+    const prices = st.prices || {};
+    const ore = prices.ASTEROID_ORE;
+    const acc = st.account;
+    let html = '<div class="srx-head">SPACE RESOURCE EXCHANGE</div>';
+    if (ore) {
+      const ch = ore.change_24h_pct || 0;
+      html += `<div class="srx-row">ASTEROID ORE <b>$${ore.price_usd}/kg</b> <span class="${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch}%</span></div>`;
+    }
+    if (acc && acc.balances) {
+      html += `<div class="srx-row">Account mark <b>$${(acc.total_usd_mark||0).toFixed(2)}</b></div>`;
+      const lines = Object.entries(acc.balances).slice(0, 4).map(([k,v]) => `${k}: ${Number(v).toFixed(2)}`).join(' · ');
+      if (lines) html += `<div class="srx-row muted">${lines}</div>`;
+    } else if (st.lastError) {
+      html += `<div class="srx-row muted">Offline — ${st.lastError.slice(0,40)}</div>`;
+    } else {
+      html += '<div class="srx-row muted">Connecting to exchange…</div>';
+    }
+    html += `<div class="srx-actions"><button type="button" id="srxOpenBtn" class="srx-btn">Open Exchange</button></div>`;
+    el.innerHTML = html;
+    const btn = document.getElementById('srxOpenBtn');
+    if (btn) btn.onclick = () => SRX.openExchange();
+  }
+  window.updateSrxPanel = updateSrxPanel;
+  window.addEventListener('srx:prices', updateSrxPanel);
+  window.addEventListener('srx:account', updateSrxPanel);
+  window.addEventListener('srx:deposit', updateSrxPanel);
+
   function startGame() {
     titleScreen?.classList.add('hidden');
     pauseScreen?.classList.add('hidden');
     waveClearScreen?.classList.add('hidden');
     gameOverScreen?.classList.add('hidden');
+    closeAllPanels();
 
     G.running = true;
     G.paused = false;
     G.wave = 0;
     G.score = 0;
-    G.tokens = 0;
+    // 8 starter ◆ plus any Stripe-purchased bank
+    let bank = 0;
+    try { bank = Number(localStorage.getItem('aria_token_bank') || 0) || 0; } catch (_) {}
+    G.tokens = 8 + Math.max(0, Math.floor(bank));
     G.ore = 0;
     G.debrisCleared = 0;
     G.hull = CFG.player.maxHull;
-    G.player.x = CFG.world.w / 2;
-    G.player.y = CFG.world.h / 2;
+    G.fuel = CFG.player.maxFuel;
+    G.shield = CFG.player.maxShield;
+    G.shieldHitT = 99;
+    G.docking = false;
+    G.dockProgress = 0;
+    G.upgrades = {
+      miningSpeed: 0, laserDamage: 0, netRadius: 0,
+      enginePower: 0, cargoCap: 0, shieldMax: 0, fuelTank: 0
+    };
+    G.player.x = CFG.world.w / 2 - 180;
+    G.player.y = CFG.world.h / 2 - 20;
     G.player.vx = 0;
     G.player.vy = 0;
     G.player.angle = 0;
     G.particles = [];
     G.floatingText = [];
     G.achievements = new Set();
+    G.combo = { count: 0, timer: 0 };
+    G.sessionStats = { oreSold: 0, damageBlocked: 0, upgradesBought: 0, tokensBought: 0 };
+    // keep wallet connection across restarts
+    initStations();
     spawnWave(0);
+    setHudChrome(true);
+    updateLiveDash();
+    updateWalletPill();
 
     if (typeof window.initThreeRenderer === 'function') {
       try { window.initThreeRenderer(); } catch (_) {}
@@ -1042,6 +2035,9 @@
     waveClearScreen?.classList.add('hidden');
     G.wave++;
     G.running = true;
+    // Soft refuel between waves
+    G.fuel = Math.min(maxFuel(), G.fuel + maxFuel() * 0.35);
+    G.shield = Math.min(maxShield(), G.shield + maxShield() * 0.4);
     spawnWave(G.wave);
   }
 
@@ -1052,16 +2048,21 @@
 
   function gameOver() {
     G.running = false;
+    setHudChrome(false);
+    closeAllPanels();
     document.getElementById('finalScore').textContent = G.score.toLocaleString();
     document.getElementById('finalWave').textContent = G.wave;
     document.getElementById('finalDebris').textContent = G.debrisCleared;
-    document.getElementById('finalOre').textContent = Math.floor(G.ore) + ' kg';
+    document.getElementById('finalOre').textContent = Math.floor(G.sessionStats.oreSold) + ' kg';
     document.getElementById('finalTokens').textContent = G.tokens;
+    const extra = document.getElementById('finalExtra');
+    if (extra) {
+      extra.textContent = `Blocked ${Math.floor(G.sessionStats.damageBlocked)} dmg · ${G.sessionStats.upgradesBought} upgrades · Bought ${G.sessionStats.tokensBought} ◆`;
+    }
     gameOverScreen?.classList.remove('hidden');
   }
 
   // ─── BOOT ─────────────────────────────────────────────────────────────────
-  // gameLoop lives at bottom of original file style — keep RAF here if game.js is sole loop
   let lastTime = performance.now();
   function gameLoop(now) {
     const dt = Math.min((now - lastTime) / 1000, 0.05);
