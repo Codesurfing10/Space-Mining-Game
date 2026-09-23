@@ -14,6 +14,11 @@ python -m http.server 8080
 
 Then open the local URL and click **LAUNCH MISSION**.
 
+## Support
+
+Free to play at https://timarc.space — tips welcome: https://ko-fi.com/spacesailing
+
+
 ## Controls
 
 | Input | Action |
