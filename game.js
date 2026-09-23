@@ -149,7 +149,8 @@
     combo: { count: 0, timer: 0 },
     sessionStats: { oreSold: 0, damageBlocked: 0, upgradesBought: 0, tokensBought: 0 },
     wallet: { connected: false, address: null, chainId: null },
-    t: 0
+    t: 0,
+    spawnGrace: 0   // seconds of post-launch invulnerability
   };
   window.G = G;
 
@@ -402,6 +403,8 @@
   }
 
   function damagePlayer(amt) {
+    // Brief post-launch invulnerability (spawn / docking geometry safe)
+    if (G.spawnGrace > 0) return;
     // Shield absorbs first
     if (G.shield > 0) {
       const absorbed = Math.min(G.shield, amt);
@@ -445,11 +448,19 @@
   // ─── SPAWNING ─────────────────────────────────────────────────────────────
   function spawnAwayFromPlayer(minDist = 350) {
     let x, y, tries = 0;
+    const baseR = (G.baseComplex && G.baseComplex.r) || 320;
+    const bx = (G.baseComplex && G.baseComplex.cx) || CFG.world.w / 2;
+    const by = (G.baseComplex && G.baseComplex.cy) || CFG.world.h / 2;
     do {
       x = rand(80, CFG.world.w - 80);
       y = rand(80, CFG.world.h - 80);
       tries++;
-    } while (Math.hypot(x - G.player.x, y - G.player.y) < minDist && tries < 40);
+    } while (
+      tries < 80 && (
+        Math.hypot(x - G.player.x, y - G.player.y) < minDist ||
+        Math.hypot(x - bx, y - by) < baseR + 40
+      )
+    );
     return { x, y };
   }
 
@@ -508,16 +519,18 @@
     }
 
     for (let i = 0; i < w.drones; i++) {
-      const p = spawnAwayFromPlayer(450);
+      const p = spawnAwayFromPlayer(waveIndex === 0 ? 700 : 500);
       G.drones.push({
         x: p.x, y: p.y, z: rand(-10, 10),
         r: 14,
         angle: rand(0, Math.PI * 2),
-        speed: rand(70, 120),
+        speed: rand(70, 110),
         hp: 40 + waveIndex * 8,
         maxHp: 40 + waveIndex * 8,
-        fireCd: rand(0.5, 1.5),
-        vx: 0, vy: 0
+        // Delay first volley so launch isn't an instant laser shower
+        fireCd: rand(1.8, 2.8) + (waveIndex === 0 ? 1.2 : 0),
+        vx: 0, vy: 0,
+        orbitDir: Math.random() < 0.5 ? 1 : -1
       });
     }
   }
@@ -842,6 +855,8 @@
   function updateLasers(dt) {
     for (let i = G.lasers.length - 1; i >= 0; i--) {
       const L = G.lasers[i];
+      // Enemy bolts are integrated + collide in updateEnemies
+      if (L.enemy) continue;
       L.x += L.vx * dt;
       L.y += L.vy * dt;
       L.life -= dt;
@@ -947,14 +962,33 @@
 
     for (const dr of G.drones) {
       const ang = angleTo(dr, G.player);
+      const dPlayer = dist(dr, G.player);
       dr.angle = ang;
-      dr.vx = Math.cos(ang) * dr.speed;
-      dr.vy = Math.sin(ang) * dr.speed;
+      // Prefer a standoff ring (~200–260) and strafe — ramming was an 80 DPS softlock
+      const preferMin = 200;
+      const preferMax = 260;
+      let steer = ang;
+      let spd = dr.speed;
+      if (dPlayer < preferMin) {
+        // Back off + orbit
+        steer = ang + Math.PI * 0.75 * (dr.orbitDir || 1);
+        spd = dr.speed * 1.05;
+      } else if (dPlayer > preferMax) {
+        // Close to engagement range
+        steer = ang;
+        spd = dr.speed;
+      } else {
+        // Circle while firing
+        steer = ang + (Math.PI / 2) * (dr.orbitDir || 1);
+        spd = dr.speed * 0.85;
+      }
+      dr.vx = Math.cos(steer) * spd;
+      dr.vy = Math.sin(steer) * spd;
       dr.x += dr.vx * dt;
       dr.y += dr.vy * dt;
 
       dr.fireCd -= dt;
-      if (dr.fireCd <= 0 && dist(dr, G.player) < 380) {
+      if (dr.fireCd <= 0 && dPlayer < 380) {
         dr.fireCd = rand(1.1, 1.8);
         G.lasers.push({
           x: dr.x, y: dr.y,
@@ -966,8 +1000,9 @@
         });
       }
 
-      if (dist(dr, G.player) < dr.r + CFG.player.radius) {
-        damagePlayer(8 * dt * 10);
+      // Contact scrape — was 8*dt*10 = 80 DPS (shield+hull gone in ~2s of overlap)
+      if (dPlayer < dr.r + CFG.player.radius) {
+        damagePlayer(20 * dt);
       }
     }
 
@@ -1045,6 +1080,7 @@
   function update(dt) {
     if (!G.running || G.paused) return;
     G.t += dt;
+    if (G.spawnGrace > 0) G.spawnGrace = Math.max(0, G.spawnGrace - dt);
     G.cooldowns.laser = Math.max(0, G.cooldowns.laser - dt);
     G.cooldowns.net = Math.max(0, G.cooldowns.net - dt);
     G.camera.shake = Math.max(0, G.camera.shake - dt * 18);
@@ -2009,11 +2045,13 @@
       miningSpeed: 0, laserDamage: 0, netRadius: 0,
       enginePower: 0, cargoCap: 0, shieldMax: 0, fuelTank: 0
     };
-    G.player.x = CFG.world.w / 2 - 180;
-    G.player.y = CFG.world.h / 2 - 20;
+    // Spawn just outside the port hangar — old (cx-180,cy-20) sat inside dock-port r=70
+    G.player.x = CFG.world.w / 2 - 420;
+    G.player.y = CFG.world.h / 2;
     G.player.vx = 0;
     G.player.vy = 0;
     G.player.angle = 0;
+    G.spawnGrace = 3.0;
     G.particles = [];
     G.floatingText = [];
     G.achievements = new Set();
@@ -2035,6 +2073,7 @@
     waveClearScreen?.classList.add('hidden');
     G.wave++;
     G.running = true;
+    G.spawnGrace = Math.max(G.spawnGrace, 1.5);
     // Soft refuel between waves
     G.fuel = Math.min(maxFuel(), G.fuel + maxFuel() * 0.35);
     G.shield = Math.min(maxShield(), G.shield + maxShield() * 0.4);
