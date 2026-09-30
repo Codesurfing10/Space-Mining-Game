@@ -2,24 +2,35 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>A·R·I·A — Space Mining & Debris Cleanup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>TIMARC SPACE — A·R·I·A | Mining & Debris Ops</title>
+<meta name="description" content="TIMARC SPACE presents A·R·I·A — mine asteroids, capture debris, upgrade your ship, and survive the waves. Play free at timarc.space.">
+<meta name="theme-color" content="#020d18">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TIMARC">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --bg:     #020d18;
-  --cyan:   #00c8ff;
+  --cyan:   #00d4ff;
   --green:  #00e5a0;
   --gold:   #ffc846;
   --red:    #ff4060;
   --purple: #b06aff;
   --blue:   #4488ff;
-  --txt:    rgba(180,230,255,.92);
-  --txt2:   rgba(120,190,220,.65);
-  --line:   rgba(0,200,255,.22);
+  --txt:    rgba(190,235,255,.95);
+  --txt2:   rgba(130,200,230,.68);
+  --line:   rgba(0,212,255,.28);
   --panel:  rgba(2,20,40,.88);
   --fnt:    'Courier New', monospace;
-  --glow:   0 0 20px rgba(0,200,255,.35);
+  --glow:   0 0 24px rgba(0,212,255,.45);
+  --glow-gold: 0 0 28px rgba(255,200,70,.45);
 }
 html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); font-family:var(--fnt); }
 canvas { display:block; }
@@ -37,36 +48,227 @@ body::before {
 .screen {
   position:fixed; inset:0; z-index:200;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:16px; background:rgba(2,13,24,.93);
+  gap:14px; background:rgba(2,13,24,.93);
   font-family:var(--fnt);
+  overflow:hidden;
 }
 .screen.hidden { display:none; }
 .screen h1 {
   font-size:clamp(28px,4vw,52px); color:var(--cyan); letter-spacing:.3em;
-  text-shadow:0 0 24px var(--cyan), 0 0 60px rgba(0,200,255,.3);
+  text-shadow:0 0 24px var(--cyan), 0 0 60px rgba(0,212,255,.35);
 }
-.screen .sub { font-size:clamp(9px,1.2vw,13px); color:var(--txt2); letter-spacing:.18em; margin-top:-10px; }
-.screen .tagline { font-size:clamp(10px,1.4vw,14px); color:var(--txt); letter-spacing:.1em; text-align:center; max-width:520px; line-height:1.8; }
+.screen .sub { font-size:clamp(9px,1.2vw,13px); color:var(--txt2); letter-spacing:.18em; margin-top:-6px; }
+.screen .tagline { font-size:clamp(10px,1.4vw,14px); color:var(--txt); letter-spacing:.1em; text-align:center; max-width:560px; line-height:1.8; }
 .screen .controls-grid {
-  display:grid; grid-template-columns:1fr 1fr; gap:6px 28px; margin-top:6px;
-  font-size:clamp(9px,1.1vw,11px);
+  display:grid; grid-template-columns:1fr 1fr; gap:4px 24px; margin-top:2px;
+  font-size:clamp(8px,1vw,10px); opacity:.72;
 }
 .ctrl-row { display:flex; gap:10px; align-items:baseline; }
-.ctrl-key { color:var(--cyan); min-width:90px; text-align:right; font-weight:bold; }
+.ctrl-key { color:var(--cyan); min-width:78px; text-align:right; font-weight:bold; }
 .ctrl-act { color:var(--txt2); }
 .start-btn {
   margin-top:8px; padding:10px 36px;
   background:transparent; border:1px solid var(--cyan); color:var(--cyan);
   font-family:var(--fnt); font-size:clamp(11px,1.4vw,14px); letter-spacing:.2em; cursor:pointer;
-  transition:all .2s;
+  transition:all .2s; border-radius:2px;
 }
-.start-btn:hover { background:rgba(0,200,255,.12); box-shadow:var(--glow); }
-.score-big { font-size:clamp(22px,3vw,42px); color:var(--gold); letter-spacing:.1em; }
+.start-btn:hover { background:rgba(0,212,255,.12); box-shadow:var(--glow); }
+.score-big { font-size:clamp(22px,3vw,42px); color:var(--gold); letter-spacing:.1em; text-shadow:0 0 20px rgba(255,200,70,.4); }
 .score-label { font-size:clamp(10px,1.2vw,13px); color:var(--txt2); letter-spacing:.15em; }
 .stat-row { display:flex; gap:40px; justify-content:center; flex-wrap:wrap; }
 .stat-block { text-align:center; }
-.stat-val { font-size:clamp(16px,2vw,26px); color:var(--cyan); }
+.stat-val { font-size:clamp(16px,2vw,26px); color:var(--cyan); text-shadow:0 0 12px rgba(0,212,255,.35); }
 .stat-lbl { font-size:10px; color:var(--txt2); letter-spacing:.12em; }
+
+/* ── TITLE HERO (TIMARC SPACE) ── */
+#titleScreen {
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 35%, rgba(0,80,140,.28) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 20% 80%, rgba(120,40,180,.12) 0%, transparent 50%),
+    radial-gradient(ellipse 45% 35% at 85% 15%, rgba(0,160,200,.1) 0%, transparent 45%),
+    rgba(1,8,18,.94);
+  gap:12px;
+}
+#titleScreen::before {
+  content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    radial-gradient(1px 1px at 8% 12%, rgba(255,255,255,.9), transparent),
+    radial-gradient(1px 1px at 22% 48%, rgba(180,230,255,.7), transparent),
+    radial-gradient(1.5px 1.5px at 35% 18%, rgba(255,255,255,.95), transparent),
+    radial-gradient(1px 1px at 48% 72%, rgba(0,212,255,.8), transparent),
+    radial-gradient(1px 1px at 62% 28%, rgba(255,255,255,.6), transparent),
+    radial-gradient(1.5px 1.5px at 75% 55%, rgba(255,200,70,.7), transparent),
+    radial-gradient(1px 1px at 88% 14%, rgba(255,255,255,.85), transparent),
+    radial-gradient(1px 1px at 12% 78%, rgba(180,230,255,.55), transparent),
+    radial-gradient(1px 1px at 55% 8%, rgba(255,255,255,.5), transparent),
+    radial-gradient(1.5px 1.5px at 92% 68%, rgba(0,212,255,.65), transparent),
+    radial-gradient(1px 1px at 40% 90%, rgba(255,255,255,.45), transparent),
+    radial-gradient(1px 1px at 70% 85%, rgba(180,230,255,.5), transparent);
+  animation: starDrift 48s linear infinite;
+  opacity:.85;
+}
+#titleScreen::after {
+  content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:radial-gradient(ellipse 60% 30% at 50% 100%, rgba(0,212,255,.08), transparent 70%);
+  animation: nebulaPulse 8s ease-in-out infinite alternate;
+}
+@keyframes starDrift {
+  0%   { transform:translateY(0); opacity:.75; }
+  50%  { opacity:.95; }
+  100% { transform:translateY(-18px); opacity:.75; }
+}
+@keyframes nebulaPulse {
+  from { opacity:.55; }
+  to   { opacity:1; }
+}
+#titleScreen > * { position:relative; z-index:1; }
+
+.brand-mark {
+  font-size:clamp(11px,1.4vw,15px);
+  color:var(--gold);
+  letter-spacing:.45em;
+  text-transform:uppercase;
+  text-shadow:0 0 18px rgba(255,200,70,.55), 0 0 40px rgba(255,200,70,.2);
+  animation: brandGlow 3.2s ease-in-out infinite alternate;
+}
+@keyframes brandGlow {
+  from { text-shadow:0 0 14px rgba(255,200,70,.4), 0 0 28px rgba(255,200,70,.15); }
+  to   { text-shadow:0 0 22px rgba(255,200,70,.7), 0 0 48px rgba(255,200,70,.3); }
+}
+.brand-rule {
+  width:min(280px,60vw); height:1px; margin:2px 0 4px;
+  background:linear-gradient(90deg, transparent, var(--gold), var(--cyan), transparent);
+  opacity:.7;
+}
+.mission-title {
+  font-size:clamp(36px,6vw,68px) !important;
+  letter-spacing:.35em !important;
+  margin:0 !important;
+  color:var(--cyan) !important;
+  text-shadow:0 0 28px var(--cyan), 0 0 70px rgba(0,212,255,.4), 0 0 120px rgba(0,120,200,.2) !important;
+}
+.mission-expand {
+  font-size:clamp(8px,1vw,11px);
+  color:var(--txt2);
+  letter-spacing:.22em;
+  text-align:center;
+  max-width:640px;
+  line-height:1.5;
+}
+.hero-tagline {
+  font-size:clamp(11px,1.5vw,15px);
+  color:var(--txt);
+  letter-spacing:.08em;
+  text-align:center;
+  max-width:540px;
+  line-height:1.75;
+  margin-top:4px;
+}
+.briefing {
+  font-size:clamp(9px,1.1vw,12px);
+  color:rgba(255,200,70,.75);
+  letter-spacing:.12em;
+  text-align:center;
+  max-width:480px;
+  font-style:normal;
+  border-left:2px solid rgba(255,200,70,.35);
+  border-right:2px solid rgba(255,200,70,.35);
+  padding:6px 16px;
+  margin:2px 0;
+}
+.feature-chips {
+  display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+  margin:4px 0 2px;
+}
+.chip {
+  font-size:clamp(8px,1vw,11px);
+  letter-spacing:.16em;
+  color:var(--cyan);
+  border:1px solid rgba(0,212,255,.35);
+  padding:5px 12px;
+  border-radius:999px;
+  background:rgba(0,212,255,.06);
+  text-shadow:0 0 8px rgba(0,212,255,.4);
+  transition:border-color .2s, background .2s;
+}
+.chip:hover { border-color:var(--gold); color:var(--gold); background:rgba(255,200,70,.08); }
+
+.controls-hint {
+  margin-top:6px;
+  padding:8px 16px;
+  border:1px solid rgba(0,212,255,.12);
+  border-radius:6px;
+  background:rgba(0,0,0,.22);
+}
+.controls-hint .controls-label {
+  font-size:8px; color:var(--txt2); letter-spacing:.2em;
+  text-align:center; margin-bottom:6px; opacity:.8;
+}
+
+/* Glowing LAUNCH CTA */
+#startBtn.launch-cta,
+.launch-cta {
+  margin-top:14px;
+  padding:14px 48px;
+  font-size:clamp(13px,1.6vw,16px) !important;
+  letter-spacing:.28em !important;
+  color:#041018 !important;
+  background:linear-gradient(135deg, #00e0ff 0%, #00a8e8 45%, #ffc846 100%) !important;
+  border:1px solid rgba(255,255,255,.35) !important;
+  border-radius:3px;
+  font-weight:bold;
+  text-shadow:none;
+  box-shadow:
+    0 0 20px rgba(0,212,255,.55),
+    0 0 48px rgba(0,212,255,.25),
+    inset 0 1px 0 rgba(255,255,255,.35);
+  animation: ctaPulse 2.4s ease-in-out infinite;
+  cursor:pointer;
+}
+#startBtn.launch-cta:hover,
+.launch-cta:hover {
+  filter:brightness(1.12);
+  box-shadow:
+    0 0 28px rgba(0,212,255,.75),
+    0 0 64px rgba(255,200,70,.35),
+    inset 0 1px 0 rgba(255,255,255,.45);
+  transform:translateY(-1px);
+}
+@keyframes ctaPulse {
+  0%, 100% {
+    box-shadow:0 0 18px rgba(0,212,255,.5), 0 0 40px rgba(0,212,255,.2), inset 0 1px 0 rgba(255,255,255,.3);
+  }
+  50% {
+    box-shadow:0 0 30px rgba(0,212,255,.75), 0 0 60px rgba(255,200,70,.3), inset 0 1px 0 rgba(255,255,255,.4);
+  }
+}
+
+/* Soft cohesion polish — pause / wave / game over */
+#pauseScreen h1,
+#waveClearScreen h1,
+#gameOverScreen h1 {
+  text-shadow:0 0 28px currentColor, 0 0 60px rgba(0,212,255,.25);
+}
+#pauseScreen .start-btn:hover,
+#waveClearScreen .start-btn:hover,
+#gameOverScreen .start-btn:hover {
+  box-shadow:var(--glow);
+}
+#waveClearScreen {
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 40%, rgba(0,229,160,.1) 0%, transparent 55%),
+    rgba(2,13,24,.93);
+}
+#gameOverScreen {
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 40%, rgba(255,64,96,.1) 0%, transparent 55%),
+    rgba(2,13,24,.93);
+}
+#pauseScreen {
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 40%, rgba(0,212,255,.08) 0%, transparent 55%),
+    rgba(2,13,24,.93);
+}
 
 /* ── ACHIEVEMENT TOAST ── */
 .achievement-toast {
@@ -252,6 +454,19 @@ body::before {
     #radarLegend .ctl { color: #c084fc; }
     #radarLegend .you { color: #00c8ff; }
 
+
+/* Short viewports — keep CTA visible */
+@media (max-height: 720px) {
+  #titleScreen { gap:8px; padding:12px 0; overflow-y:auto; }
+  .mission-title { font-size:clamp(28px,8vh,52px) !important; }
+  .briefing { display:none; }
+  .controls-hint { padding:4px 12px; }
+  #startBtn.launch-cta { margin-top:8px; padding:12px 36px; }
+}
+@media (max-height: 560px) {
+  .feature-chips { display:none; }
+  .hero-tagline { font-size:11px; }
+}
   </style>
 </head>
 <body>
@@ -305,29 +520,40 @@ body::before {
 
 <!-- TITLE -->
 <div class="screen" id="titleScreen">
-  <div style="font-size:clamp(9px,1vw,11px);color:var(--txt2);letter-spacing:.25em">AUTONOMOUS REMEDIATION &amp; INTERCEPTION ARCHITECTURE</div>
-  <h1>A·R·I·A</h1>
-  <div class="sub">SPACE MINING &amp; DEBRIS CLEANUP · v5.2 — Dynamic Ops</div>
-  <div class="tagline">
-    Mine asteroids. Manage fuel &amp; shields. Sell ore for tokens.<br>
-    Upgrade your ship · Connect a wallet · Top up with Stripe.
+  <div class="brand-mark">TIMARC SPACE</div>
+  <div class="brand-rule" aria-hidden="true"></div>
+  <h1 class="mission-title">A·R·I·A</h1>
+  <div class="mission-expand">AUTONOMOUS REMEDIATION &amp; INTERCEPTION ARCHITECTURE</div>
+  <div class="sub">SPACE MINING · DEBRIS CLEANUP · WAVE OPS</div>
+  <div class="hero-tagline">
+    Mine the belt. Capture orbital debris. Upgrade your ship.<br>
+    Clear the waves — or get torn apart trying.
   </div>
-  <div class="controls-grid">
-    <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span class="ctrl-act">Thrust (fuel)</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">CLICK</span><span class="ctrl-act">Laser / Net</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">E</span><span class="ctrl-act">Mine</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">R</span><span class="ctrl-act">Dock / sell</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">U</span><span class="ctrl-act">Upgrades</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">B</span><span class="ctrl-act">Buy tokens</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">W</span><span class="ctrl-act">Wallet*</span></div>
-    <div class="ctrl-row"><span class="ctrl-key">ESC</span><span class="ctrl-act">Pause</span></div>
+  <div class="briefing">MISSION BRIEFING — Extract ore · Net debris · Survive escalating threats</div>
+  <div class="feature-chips" aria-label="Mission features">
+    <span class="chip">◆ MINE</span>
+    <span class="chip">◈ CAPTURE</span>
+    <span class="chip">▲ UPGRADE</span>
+    <span class="chip">✦ SURVIVE</span>
   </div>
-  <button class="start-btn" id="startBtn">▶ LAUNCH MISSION</button>
-  <div style="font-size:10px;color:var(--txt2);letter-spacing:.1em;margin-top:4px">* Wallet key is also the purple rail button · Stripe packs · Live dashboard</div>
+  <div class="controls-hint">
+    <div class="controls-label">CONTROLS</div>
+    <div class="controls-grid">
+      <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span class="ctrl-act">Thrust</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">LMB / RMB</span><span class="ctrl-act">Laser / Net</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">E</span><span class="ctrl-act">Mine</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">R</span><span class="ctrl-act">Dock / sell</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">U</span><span class="ctrl-act">Upgrades</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">ESC</span><span class="ctrl-act">Pause</span></div>
+    </div>
+  </div>
+  <button class="start-btn launch-cta" id="startBtn">▶ LAUNCH MISSION</button>
+  <div style="font-size:9px;color:var(--txt2);letter-spacing:.12em;margin-top:2px;opacity:.7">timarc.space · Spacesailing10</div>
 </div>
 
 <!-- PAUSE -->
 <div class="screen hidden" id="pauseScreen">
+  <div style="font-size:clamp(9px,1.1vw,11px);color:var(--gold);letter-spacing:.35em">TIMARC SPACE</div>
   <h1 style="font-size:clamp(20px,3vw,36px)">MISSION PAUSED</h1>
   <div class="tagline" style="color:var(--txt2)">ESC or Resume to continue</div>
   <button class="start-btn" id="resumeBtn">▶ RESUME</button>
@@ -361,7 +587,7 @@ body::before {
     <div class="panel-header">
       <div>
         <div class="panel-title">TOKEN PACKS</div>
-        <div class="panel-sub">Stripe Payment Links · demo until links are set</div>
+        <div class="panel-sub">Boost your mission tokens · secure checkout</div>
       </div>
       <button class="panel-close" id="closeBuyBtn">✕</button>
     </div>
@@ -372,7 +598,7 @@ body::before {
       Preferred: Stripe Payment Links or Checkout Session via your backend<br>
       <code>CFG.payments.checkoutApiUrl</code> → POST { packId, wallet? } → { url }
     </div>
-    <div class="hint" id="stripeStatus">Status: demo grants (no charge) — Payment Links stay off until configured</div>
+    <div class="hint" id="stripeStatus">Status: demo mode — packs grant tokens for testing until live checkout is enabled</div>
   </div>
 </div>
 
@@ -382,7 +608,7 @@ body::before {
     <div class="panel-header">
       <div>
         <div class="panel-title">WALLET LINK</div>
-        <div class="panel-sub">Browser wallet · optional chain API</div>
+        <div class="panel-sub">Link a wallet to sync rewards across sessions</div>
       </div>
       <button class="panel-close" id="closeWalletBtn">✕</button>
     </div>
@@ -436,7 +662,8 @@ body::before {
 
 <!-- WAVE CLEAR -->
 <div class="screen hidden" id="waveClearScreen">
-  <div style="font-size:clamp(10px,1.2vw,13px);color:var(--green);letter-spacing:.2em">LEVEL CLEARED</div>
+  <div style="font-size:clamp(9px,1.1vw,12px);color:var(--gold);letter-spacing:.28em;margin-bottom:2px">TIMARC SPACE</div>
+  <div style="font-size:clamp(10px,1.2vw,13px);color:var(--green);letter-spacing:.2em;text-shadow:0 0 16px rgba(0,229,160,.45)">LEVEL CLEARED</div>
   <h1 id="waveClearTitle" style="font-size:clamp(22px,3.5vw,44px)">LEVEL 1 COMPLETE</h1>
   <div class="stat-row">
     <div class="stat-block"><div class="stat-val" id="waveBonus">+500</div><div class="stat-lbl">WAVE BONUS</div></div>
@@ -453,6 +680,7 @@ body::before {
 <div class="screen hidden" id="gameOverScreen">
   <div style="font-size:clamp(10px,1.2vw,13px);color:var(--red);letter-spacing:.2em">⚠ MISSION FAILED — HULL BREACH</div>
   <h1 style="color:var(--red);font-size:clamp(22px,3.5vw,44px)">A·R·I·A DESTROYED</h1>
+  <div class="sub" style="color:var(--txt2);margin-top:-4px">TIMARC SPACE · MISSION FAILED</div>
   <div class="score-label">FINAL SCORE</div>
   <div class="score-big" id="finalScore">0</div>
   <div class="stat-row" style="margin-top:8px">
@@ -480,5 +708,15 @@ import('./three-renderer.js')
 </script>
 <script src="game.js"></script>
   <script src="srx-bridge.js"></script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.warn('SW register failed', err);
+    });
+  });
+}
+</script>
 </body>
 </html>
