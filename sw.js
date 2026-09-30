@@ -2,13 +2,14 @@
  * Caches local shell (HTML + local JS). Does NOT cache Three.js CDN
  * (unpkg) so graphics stay network-first and we avoid stale/CORS issues.
  */
-const CACHE = 'timarc-space-shell-v1';
+const CACHE = 'timarc-space-shell-v2';
 const SHELL = [
   '/',
   '/index.html',
   '/game.js',
   '/three-renderer.js',
   '/srx-bridge.js',
+  '/mobile-controls.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

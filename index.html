@@ -455,6 +455,108 @@ body::before {
     #radarLegend .you { color: #00c8ff; }
 
 
+
+/* ── MOBILE / TOUCH ON-SCREEN CONTROLS (desktop unchanged) ── */
+#mobileControls {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  touch-action: none;
+  font-family: var(--fnt);
+}
+body.touch-controls #mobileControls.mc-playing { display: block; }
+body.touch-controls #gameCanvas { touch-action: none; }
+body.touch-controls {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mc-stick {
+  position: absolute;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: rgba(0, 30, 50, .28);
+  border: 2px solid rgba(0, 212, 255, .35);
+  pointer-events: auto;
+  touch-action: none;
+  box-shadow: inset 0 0 24px rgba(0, 212, 255, .08);
+}
+.mc-stick.active { border-color: rgba(0, 212, 255, .7); background: rgba(0, 40, 70, .4); }
+.mc-stick-knob {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 52px; height: 52px;
+  margin: 0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 212, 255, .35);
+  border: 2px solid rgba(0, 212, 255, .85);
+  box-shadow: 0 0 16px rgba(0, 212, 255, .35);
+  pointer-events: none;
+}
+.mc-actions {
+  position: absolute;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  grid-template-rows: repeat(3, 64px);
+  gap: 10px;
+  pointer-events: none;
+}
+.mc-btn {
+  pointer-events: auto;
+  touch-action: none;
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 212, 255, .45);
+  background: rgba(2, 20, 40, .45);
+  color: var(--cyan);
+  font-family: var(--fnt);
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: .06em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.15;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  box-shadow: 0 0 14px rgba(0, 212, 255, .12);
+}
+.mc-btn.pressed, .mc-btn:active {
+  background: rgba(0, 212, 255, .28);
+  border-color: rgba(0, 212, 255, .95);
+  box-shadow: 0 0 18px rgba(0, 212, 255, .4);
+  transform: scale(.96);
+}
+.mc-btn.fire { border-color: rgba(255, 64, 96, .55); color: #ff6b80; grid-column: 3; grid-row: 1; }
+.mc-btn.fire.pressed { background: rgba(255, 64, 96, .3); }
+.mc-btn.net { border-color: rgba(176, 106, 255, .55); color: #c49bff; grid-column: 2; grid-row: 1; }
+.mc-btn.net.pressed { background: rgba(176, 106, 255, .28); }
+.mc-btn.mine { border-color: rgba(255, 200, 70, .55); color: var(--gold); grid-column: 3; grid-row: 2; }
+.mc-btn.mine.pressed { background: rgba(255, 200, 70, .25); }
+.mc-btn.dock { border-color: rgba(0, 229, 160, .55); color: var(--green); grid-column: 2; grid-row: 2; }
+.mc-btn.brake { grid-column: 1; grid-row: 2; color: var(--txt); }
+.mc-btn.shop { grid-column: 1; grid-row: 3; font-size: 9px; }
+.mc-btn.pause { grid-column: 3; grid-row: 3; border-color: rgba(190, 235, 255, .4); color: var(--txt); }
+@media (max-width: 420px) {
+  .mc-stick { width: 112px; height: 112px; }
+  .mc-stick-knob { width: 46px; height: 46px; }
+  .mc-actions { grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 8px; }
+  .mc-btn { width: 56px; height: 56px; font-size: 9px; }
+}
+@media (pointer: fine) and (min-width: 901px) {
+  /* Extra guard: never show overlay on fine-pointer desktop layouts */
+  body:not(.touch-controls) #mobileControls { display: none !important; }
+}
+
 /* Short viewports — keep CTA visible */
 @media (max-height: 720px) {
   #titleScreen { gap:8px; padding:12px 0; overflow-y:auto; }
@@ -696,6 +798,24 @@ body::before {
 <div id="threeContainer" style="position:absolute; inset:0; z-index:0; pointer-events:none;"></div>
 <canvas id="gameCanvas" style="position:absolute; inset:0; z-index:1;"></canvas>
 
+<!-- MOBILE / TOUCH CONTROLS (hidden on desktop mouse/keyboard) -->
+<div id="mobileControls" hidden aria-hidden="true" aria-label="Touch controls">
+  <div class="mc-stick" id="mcStick" role="presentation" aria-label="Thrust stick">
+    <div class="mc-stick-knob" id="mcStickKnob"></div>
+  </div>
+  <div class="mc-actions">
+    <button type="button" class="mc-btn net" id="mcNet" aria-label="Capture net">NET</button>
+    <button type="button" class="mc-btn fire" id="mcFire" aria-label="Fire laser">FIRE</button>
+    <button type="button" class="mc-btn brake" id="mcBrake" aria-label="Emergency brake">BRK</button>
+    <button type="button" class="mc-btn dock" id="mcDock" aria-label="Dock">DOCK</button>
+    <button type="button" class="mc-btn mine" id="mcMine" aria-label="Mine asteroid">MINE</button>
+    <button type="button" class="mc-btn shop" id="mcShop" aria-label="Upgrades">SHOP</button>
+    <button type="button" class="mc-btn pause" id="mcPause" aria-label="Pause">❚❚</button>
+  </div>
+</div>
+
+
+
 <script type="module">
 import('./three-renderer.js')
   .then(mod => {
@@ -708,6 +828,7 @@ import('./three-renderer.js')
 </script>
 <script src="game.js"></script>
   <script src="srx-bridge.js"></script>
+<script src="mobile-controls.js"></script>
 
 <script>
 if ('serviceWorker' in navigator) {
